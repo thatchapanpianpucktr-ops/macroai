@@ -1,65 +1,145 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import Link from "next/link";
+import { useMemo } from "react";
+import { CalorieRing, MacroBar } from "@/components/Progress";
+import { FoodScanner } from "@/components/FoodScanner";
+import { useFoods, useSettings, useWeights } from "@/lib/store";
+import { computeTargets, currentWeight, estimateTDEE } from "@/lib/tdee";
+import { todayYmd, ymdToLabel } from "@/lib/date";
+
+export default function TodayPage() {
+  const [settings] = useSettings();
+  const { foods, remove } = useFoods();
+  const { weights } = useWeights();
+  const date = todayYmd();
+
+  const tdee = useMemo(
+    () => estimateTDEE(settings, weights, foods),
+    [settings, weights, foods],
+  );
+  const weight = useMemo(() => currentWeight(weights), [weights]);
+  const targets = useMemo(
+    () => computeTargets(settings, tdee.tdee, weight),
+    [settings, tdee.tdee, weight],
+  );
+
+  const today = foods.filter((f) => f.date === date);
+  const totals = today.reduce(
+    (a, f) => ({
+      calories: a.calories + f.calories,
+      protein: a.protein + f.protein,
+      carbs: a.carbs + f.carbs,
+      fat: a.fat + f.fat,
+    }),
+    { calories: 0, protein: 0, carbs: 0, fat: 0 },
+  );
+
+  if (!settings.onboarded) {
+    return (
+      <div className="flex flex-col items-center text-center gap-5 mt-16">
+        <div className="text-5xl">🥗</div>
+        <h1 className="text-2xl font-bold">Welcome to MacroAI</h1>
+        <p className="text-[var(--muted)] max-w-xs">
+          Snap a photo of your meal and AI estimates the calories &amp; macros.
+          Log your weight and the app learns your real metabolism to set smart
+          targets.
+        </p>
+        <Link href="/settings" className="btn btn-primary px-6 py-3">
+          Get started
+        </Link>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="space-y-5">
+      <header className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold">Today</h1>
+          <p className="text-sm text-[var(--muted)]">{ymdToLabel(date)}</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <div className="text-right">
+          <div className="text-xs text-[var(--muted)]">Est. expenditure</div>
+          <div className="font-semibold tabular-nums">{tdee.tdee} kcal</div>
         </div>
-      </main>
+      </header>
+
+      <section className="card p-5 flex flex-col items-center">
+        <CalorieRing consumed={totals.calories} target={targets.calories} />
+        <div className="grid grid-cols-3 gap-4 w-full mt-5">
+          <MacroBar
+            label="Protein"
+            value={totals.protein}
+            target={targets.protein}
+            color="var(--accent)"
+          />
+          <MacroBar
+            label="Carbs"
+            value={totals.carbs}
+            target={targets.carbs}
+            color="var(--accent-2)"
+          />
+          <MacroBar
+            label="Fat"
+            value={totals.fat}
+            target={targets.fat}
+            color="var(--warn)"
+          />
+        </div>
+      </section>
+
+      <FoodScanner date={date} />
+
+      {tdee.method === "formula" && (
+        <p className="text-xs text-[var(--muted)] text-center px-4">
+          Targets use a starting estimate. Log food &amp; weight for ~1 week and
+          they’ll adapt to your real metabolism.
+        </p>
+      )}
+
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold text-[var(--muted)]">
+          Logged today ({today.length})
+        </h2>
+        {today.length === 0 && (
+          <div className="card p-6 text-center text-sm text-[var(--muted)]">
+            Nothing logged yet. Tap “Scan food” to start.
+          </div>
+        )}
+        {today.map((f) => (
+          <div key={f.id} className="card p-3 flex items-center gap-3">
+            {f.thumb ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={f.thumb}
+                alt=""
+                className="w-12 h-12 rounded-lg object-cover shrink-0"
+              />
+            ) : (
+              <div className="w-12 h-12 rounded-lg bg-[var(--surface-2)] grid place-items-center shrink-0 text-lg">
+                🍽️
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="font-medium truncate">{f.name}</div>
+              <div className="text-xs text-[var(--muted)]">
+                {f.grams ? `${f.grams} g · ` : ""}P {f.protein} · C {f.carbs} · F{" "}
+                {f.fat}
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <div className="font-semibold tabular-nums">{f.calories}</div>
+              <button
+                onClick={() => remove(f.id)}
+                className="text-[11px] text-[var(--danger)]"
+              >
+                remove
+              </button>
+            </div>
+          </div>
+        ))}
+      </section>
     </div>
   );
 }
