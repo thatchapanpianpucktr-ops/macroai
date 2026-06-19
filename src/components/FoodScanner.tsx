@@ -14,7 +14,8 @@ interface DraftItem extends AnalyzedItem {
 
 export function FoodScanner({ date }: { date: string }) {
   const { add } = useFoods();
-  const fileRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const libraryRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -135,11 +136,20 @@ export function FoodScanner({ date }: { date: string }) {
 
   return (
     <>
+      {/* Camera (rear) on phones; ignored on desktop. */}
       <input
-        ref={fileRef}
+        ref={cameraRef}
         type="file"
         accept="image/*"
         capture="environment"
+        className="hidden"
+        onChange={onFile}
+      />
+      {/* Pick an existing photo from the gallery / file system. */}
+      <input
+        ref={libraryRef}
+        type="file"
+        accept="image/*"
         className="hidden"
         onChange={onFile}
       />
@@ -147,7 +157,7 @@ export function FoodScanner({ date }: { date: string }) {
       <div className="grid grid-cols-2 gap-3">
         <button
           className="btn btn-primary py-3"
-          onClick={() => fileRef.current?.click()}
+          onClick={() => cameraRef.current?.click()}
         >
           <svg width={20} height={20} viewBox="0 0 24 24" fill="none">
             <path
@@ -158,19 +168,30 @@ export function FoodScanner({ date }: { date: string }) {
             />
             <circle cx="12" cy="13" r="3.2" stroke="currentColor" strokeWidth={1.8} />
           </svg>
-          Scan food
+          Take photo
         </button>
         <button
           className="btn btn-ghost py-3"
-          onClick={() => {
-            setOpen(true);
-            reset();
-            addManualRow();
-          }}
+          onClick={() => libraryRef.current?.click()}
         >
-          + Add manually
+          <svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+            <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth={1.8} />
+            <path d="M3 16l5-4 4 3 3-2 6 5" stroke="currentColor" strokeWidth={1.8} strokeLinejoin="round" />
+            <circle cx="9" cy="9.5" r="1.4" fill="currentColor" />
+          </svg>
+          Upload photo
         </button>
       </div>
+      <button
+        className="btn btn-ghost w-full py-3 mt-3"
+        onClick={() => {
+          setOpen(true);
+          reset();
+          addManualRow();
+        }}
+      >
+        + Add manually
+      </button>
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60">

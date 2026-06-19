@@ -5,7 +5,15 @@ import type { AnalyzeResponse } from "@/lib/types";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+// Tried in order; we fall back to the next when one is quota-blocked (429).
+// An optional GEMINI_MODEL env var is tried first.
+const MODELS = [
+  process.env.GEMINI_MODEL,
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-flash-latest",
+].filter((m): m is string => Boolean(m));
 
 const PROMPT = `You are a nutrition estimation assistant for a calorie-tracking app.
 Look at the food photo and identify each distinct food/drink item.
@@ -65,43 +73,67 @@ export async function POST(req: Request) {
     );
   }
 
-  try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: MODEL,
-      generationConfig: {
-        responseMimeType: "application/json",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        responseSchema: responseSchema as any,
-        temperature: 0.2,
-      },
-    });
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const parts = [
+    { text: PROMPT + (hint ? `\n\nUser hint about the food: ${hint}` : "") },
+    { inlineData: { data: imageBase64, mimeType } },
+  ];
 
-    const parts = [
-      { text: PROMPT + (hint ? `\n\nUser hint about the food: ${hint}` : "") },
-      { inlineData: { data: imageBase64, mimeType } },
-    ];
+  let lastError = "";
+  let quotaBlocked = false;
 
-    const result = await model.generateContent(parts);
-    const text = result.response.text();
-    const parsed = JSON.parse(text) as AnalyzeResponse;
+  for (const modelName of MODELS) {
+    try {
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        generationConfig: {
+          responseMimeType: "application/json",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          responseSchema: responseSchema as any,
+          temperature: 0.2,
+        },
+      });
 
-    // sanity defaults
-    parsed.items = (parsed.items || []).map((it) => ({
-      name: String(it.name ?? "Food"),
-      grams: Math.max(0, Math.round(Number(it.grams) || 0)),
-      calories: Math.max(0, Math.round(Number(it.calories) || 0)),
-      protein: Math.max(0, Math.round((Number(it.protein) || 0) * 10) / 10),
-      carbs: Math.max(0, Math.round((Number(it.carbs) || 0) * 10) / 10),
-      fat: Math.max(0, Math.round((Number(it.fat) || 0) * 10) / 10),
-    }));
+      const result = await model.generateContent(parts);
+      const text = result.response.text();
+      const parsed = JSON.parse(text) as AnalyzeResponse;
 
-    return NextResponse.json(parsed);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
+      parsed.items = (parsed.items || []).map((it) => ({
+        name: String(it.name ?? "Food"),
+        grams: Math.max(0, Math.round(Number(it.grams) || 0)),
+        calories: Math.max(0, Math.round(Number(it.calories) || 0)),
+        protein: Math.max(0, Math.round((Number(it.protein) || 0) * 10) / 10),
+        carbs: Math.max(0, Math.round((Number(it.carbs) || 0) * 10) / 10),
+        fat: Math.max(0, Math.round((Number(it.fat) || 0) * 10) / 10),
+      }));
+
+      return NextResponse.json(parsed);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      lastError = message;
+      const isQuota = /\b429\b|quota|rate.?limit/i.test(message);
+      if (isQuota) {
+        quotaBlocked = true;
+        // try the next model
+        continue;
+      }
+      // Non-quota error (bad image, invalid key, etc.) — stop early.
+      break;
+    }
+  }
+
+  if (quotaBlocked) {
     return NextResponse.json(
-      { error: `Failed to analyze image: ${message}` },
-      { status: 502 },
+      {
+        error:
+          "Your Gemini free-tier quota is exhausted for all available models right now. Wait a minute (per-minute limit) or until tomorrow (daily limit), or enable billing on your Google AI Studio key for higher limits.",
+      },
+      { status: 429 },
     );
   }
+
+  return NextResponse.json(
+    { error: `Failed to analyze image: ${lastError}` },
+    { status: 502 },
+  );
 }
