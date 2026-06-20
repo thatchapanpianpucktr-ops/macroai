@@ -7,12 +7,17 @@ import {
   type Settings,
   type WeightEntry,
 } from "./types";
+import { defaultMeal } from "./meal";
 
 const KEYS = {
   settings: "macroai.settings.v1",
   foods: "macroai.foods.v1",
   weights: "macroai.weights.v1",
+  water: "macroai.water.v1",
 } as const;
+
+/** map of YYYY-MM-DD -> number of glasses */
+type WaterMap = Record<string, number>;
 
 type Key = keyof typeof KEYS;
 
@@ -92,6 +97,7 @@ export function useFoods(): {
     const list = read<FoodEntry[]>("foods", []);
     const entry: FoodEntry = {
       ...f,
+      meal: f.meal ?? defaultMeal(),
       id:
         typeof crypto !== "undefined" && crypto.randomUUID
           ? crypto.randomUUID()
@@ -154,6 +160,34 @@ export function useWeights(): {
   return { weights, setWeight, remove };
 }
 
+// ---- Water -------------------------------------------------------------
+
+export function useWater(date: string): {
+  glasses: number;
+  setGlasses: (n: number) => void;
+} {
+  const json = useSyncExternalStore(
+    subscribe,
+    () => JSON.stringify(read<WaterMap>("water", {})),
+    () => "{}",
+  );
+  const map = JSON.parse(json) as WaterMap;
+  const glasses = map[date] ?? 0;
+
+  const setGlasses = useCallback(
+    (n: number) => {
+      const current = read<WaterMap>("water", {});
+      const next = Math.max(0, Math.round(n));
+      if (next === 0) delete current[date];
+      else current[date] = next;
+      write("water", current);
+    },
+    [date],
+  );
+
+  return { glasses, setGlasses };
+}
+
 export function exportAll() {
   return {
     app: "macroai",
@@ -162,6 +196,7 @@ export function exportAll() {
     settings: read<Settings>("settings", DEFAULT_SETTINGS),
     foods: read<FoodEntry[]>("foods", []),
     weights: read<WeightEntry[]>("weights", []),
+    water: read<WaterMap>("water", {}),
   };
 }
 
@@ -169,6 +204,7 @@ export type BackupShape = {
   settings?: Partial<Settings>;
   foods?: FoodEntry[];
   weights?: WeightEntry[];
+  water?: WaterMap;
 };
 
 /**
@@ -189,6 +225,14 @@ export function importAll(
   if (data.settings && typeof data.settings === "object") {
     const current = read<Settings>("settings", DEFAULT_SETTINGS);
     write("settings", { ...DEFAULT_SETTINGS, ...current, ...data.settings });
+  }
+
+  if (data.water && typeof data.water === "object") {
+    if (mode === "replace") {
+      write("water", data.water);
+    } else {
+      write("water", { ...read<WaterMap>("water", {}), ...data.water });
+    }
   }
 
   if (mode === "replace") {

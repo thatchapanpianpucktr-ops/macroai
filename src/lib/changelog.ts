@@ -10,6 +10,22 @@ export interface ChangelogEntry {
 // Newest first. Bump `build` whenever you want the popup to show again.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    build: 3,
+    version: "1.2",
+    date: "2026-06-20",
+    title: "Accuracy, history & more control",
+    items: [
+      "Search a real food database (Open Food Facts) for exact macros.",
+      "Scan product barcodes to log packaged foods instantly.",
+      "Log to any day — swipe between dates on the Today screen.",
+      "Quick-add your recent foods with one tap.",
+      "Meals are now grouped (breakfast / lunch / dinner / snacks).",
+      "Track your daily water glasses.",
+      "Backup & restore your data from Settings (move between phones).",
+      "Pick your timezone so your “day” starts and ends correctly.",
+    ],
+  },
+  {
     build: 2,
     version: "1.1",
     date: "2026-06-20",

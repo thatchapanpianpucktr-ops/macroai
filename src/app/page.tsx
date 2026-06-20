@@ -5,11 +5,15 @@ import { useMemo, useState } from "react";
 import { CalorieRing, MacroBar } from "@/components/Progress";
 import { FoodScanner } from "@/components/FoodScanner";
 import { FoodSearch } from "@/components/FoodSearch";
+import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { FoodEditSheet } from "@/components/FoodEditSheet";
 import { QuickAdd } from "@/components/QuickAdd";
+import { WaterTracker } from "@/components/WaterTracker";
 import { useFoods, useSettings, useWeights } from "@/lib/store";
 import { currentWeight, estimateTDEE, resolveTargets } from "@/lib/tdee";
 import { addDaysYmd, todayYmd, ymdToLabel } from "@/lib/date";
+import { MEAL_ICONS, MEAL_LABELS, MEAL_ORDER } from "@/lib/meal";
+import type { FoodEntry } from "@/lib/types";
 
 export default function TodayPage() {
   const [settings] = useSettings();
@@ -116,9 +120,14 @@ export default function TodayPage() {
 
       <FoodScanner date={date} />
 
-      <FoodSearch date={date} />
+      <div className="grid grid-cols-2 gap-2">
+        <FoodSearch date={date} />
+        <BarcodeScanner date={date} />
+      </div>
 
       <QuickAdd date={date} />
+
+      <WaterTracker date={date} />
 
       {settings.useCustomTargets ? (
         <p className="text-xs text-[var(--muted)] text-center px-4">
@@ -133,7 +142,7 @@ export default function TodayPage() {
         )
       )}
 
-      <section className="space-y-2">
+      <section className="space-y-4">
         <h2 className="text-sm font-semibold text-[var(--muted)]">
           {isToday ? "Logged today" : "Logged"} ({dayFoods.length})
         </h2>
@@ -142,37 +151,26 @@ export default function TodayPage() {
             Nothing logged yet. Take a photo, describe it, or add manually.
           </div>
         )}
-        {dayFoods.map((f) => (
-          <button
-            key={f.id}
-            onClick={() => setEditingId(f.id)}
-            className="card p-3 flex items-center gap-3 w-full text-left active:opacity-80"
-          >
-            {f.thumb ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={f.thumb}
-                alt=""
-                className="w-12 h-12 rounded-lg object-cover shrink-0"
-              />
-            ) : (
-              <div className="w-12 h-12 rounded-lg bg-[var(--surface-2)] grid place-items-center shrink-0 text-lg">
-                🍽️
+        {MEAL_ORDER.map((meal) => {
+          const items = dayFoods.filter((f) => (f.meal ?? "snack") === meal);
+          if (items.length === 0) return null;
+          const kcal = items.reduce((a, f) => a + f.calories, 0);
+          return (
+            <div key={meal} className="space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                  {MEAL_ICONS[meal]} {MEAL_LABELS[meal]}
+                </h3>
+                <span className="text-xs text-[var(--muted)] tabular-nums">
+                  {Math.round(kcal)} kcal
+                </span>
               </div>
-            )}
-            <div className="flex-1 min-w-0">
-              <div className="font-medium truncate">{f.name}</div>
-              <div className="text-xs text-[var(--muted)]">
-                {f.grams ? `${f.grams} g · ` : ""}P {f.protein} · C {f.carbs} · F{" "}
-                {f.fat}
-              </div>
+              {items.map((f) => (
+                <FoodRow key={f.id} f={f} onClick={() => setEditingId(f.id)} />
+              ))}
             </div>
-            <div className="text-right shrink-0">
-              <div className="font-semibold tabular-nums">{f.calories}</div>
-              <div className="text-[11px] text-[var(--muted)]">edit</div>
-            </div>
-          </button>
-        ))}
+          );
+        })}
       </section>
 
       <FoodEditSheet
@@ -182,5 +180,37 @@ export default function TodayPage() {
         onDelete={(id) => remove(id)}
       />
     </div>
+  );
+}
+
+function FoodRow({ f, onClick }: { f: FoodEntry; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="card p-3 flex items-center gap-3 w-full text-left active:opacity-80"
+    >
+      {f.thumb ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={f.thumb}
+          alt=""
+          className="w-12 h-12 rounded-lg object-cover shrink-0"
+        />
+      ) : (
+        <div className="w-12 h-12 rounded-lg bg-[var(--surface-2)] grid place-items-center shrink-0 text-lg">
+          🍽️
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="font-medium truncate">{f.name}</div>
+        <div className="text-xs text-[var(--muted)]">
+          {f.grams ? `${f.grams} g · ` : ""}P {f.protein} · C {f.carbs} · F {f.fat}
+        </div>
+      </div>
+      <div className="text-right shrink-0">
+        <div className="font-semibold tabular-nums">{f.calories}</div>
+        <div className="text-[11px] text-[var(--muted)]">edit</div>
+      </div>
+    </button>
   );
 }

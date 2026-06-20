@@ -37,6 +37,8 @@ export interface WeightEntry {
   kg: number;
 }
 
+export type Meal = "breakfast" | "lunch" | "dinner" | "snack";
+
 export interface FoodEntry {
   id: string;
   /** YYYY-MM-DD */
@@ -50,6 +52,7 @@ export interface FoodEntry {
   carbs: number;
   fat: number;
   grams?: number;
+  meal?: Meal;
   source: "ai" | "manual" | "db" | "barcode";
   /** small base64 thumbnail for the log list */
   thumb?: string;

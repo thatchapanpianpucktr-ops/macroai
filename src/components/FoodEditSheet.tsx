@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { NumberInput } from "@/components/NumberInput";
-import type { FoodEntry } from "@/lib/types";
+import { MEAL_LABELS, MEAL_ORDER } from "@/lib/meal";
+import type { FoodEntry, Meal } from "@/lib/types";
 
 type Draft = {
   name: string;
@@ -11,6 +12,7 @@ type Draft = {
   protein: number;
   carbs: number;
   fat: number;
+  meal: Meal;
 };
 
 export function FoodEditSheet({
@@ -35,6 +37,7 @@ export function FoodEditSheet({
         protein: entry.protein,
         carbs: entry.carbs,
         fat: entry.fat,
+        meal: entry.meal ?? "snack",
       });
     } else {
       setDraft(null);
@@ -60,6 +63,7 @@ export function FoodEditSheet({
       protein: Math.max(0, draft.protein),
       carbs: Math.max(0, draft.carbs),
       fat: Math.max(0, draft.fat),
+      meal: draft.meal,
     });
     onClose();
   }
@@ -81,6 +85,21 @@ export function FoodEditSheet({
             value={draft.name}
             onChange={(e) => set("name", e.target.value)}
           />
+        </label>
+
+        <label className="block mb-3">
+          <span className="text-xs text-[var(--muted)] mb-1 block">Meal</span>
+          <select
+            className="input"
+            value={draft.meal}
+            onChange={(e) => set("meal", e.target.value as Meal)}
+          >
+            {MEAL_ORDER.map((m) => (
+              <option key={m} value={m}>
+                {MEAL_LABELS[m]}
+              </option>
+            ))}
+          </select>
         </label>
 
         <div className="grid grid-cols-5 gap-2 text-center text-xs">
