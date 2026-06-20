@@ -5,6 +5,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { ServiceWorker } from "@/components/ServiceWorker";
 import { WhatsNew } from "@/components/WhatsNew";
 import { ApiKeyPrompt } from "@/components/ApiKeyPrompt";
+import { Analytics } from "@vercel/analytics/next";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -51,6 +52,7 @@ export default function RootLayout({
         <ServiceWorker />
         <WhatsNew />
         <ApiKeyPrompt />
+        <Analytics />
       </body>
     </html>
   );
