@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { CalorieRing, MacroBar } from "@/components/Progress";
 import { FoodScanner } from "@/components/FoodScanner";
+import { FoodSearch } from "@/components/FoodSearch";
 import { FoodEditSheet } from "@/components/FoodEditSheet";
 import { QuickAdd } from "@/components/QuickAdd";
 import { useFoods, useSettings, useWeights } from "@/lib/store";
@@ -114,6 +115,8 @@ export default function TodayPage() {
       </section>
 
       <FoodScanner date={date} />
+
+      <FoodSearch date={date} />
 
       <QuickAdd date={date} />
 

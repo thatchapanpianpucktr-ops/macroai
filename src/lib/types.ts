@@ -50,7 +50,7 @@ export interface FoodEntry {
   carbs: number;
   fat: number;
   grams?: number;
-  source: "ai" | "manual";
+  source: "ai" | "manual" | "db" | "barcode";
   /** small base64 thumbnail for the log list */
   thumb?: string;
 }
