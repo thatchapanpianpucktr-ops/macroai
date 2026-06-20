@@ -6,6 +6,17 @@ import { useFoods } from "@/lib/store";
 import { NumberInput } from "@/components/NumberInput";
 import type { AnalyzedItem, AnalyzeResponse } from "@/lib/types";
 
+const CONF_BG: Record<string, string> = {
+  high: "rgba(52,211,153,0.18)",
+  medium: "rgba(251,191,36,0.18)",
+  low: "rgba(248,113,113,0.18)",
+};
+const CONF_FG: Record<string, string> = {
+  high: "var(--accent)",
+  medium: "var(--warn)",
+  low: "var(--danger)",
+};
+
 interface DraftItem extends AnalyzedItem {
   /** original grams from the model, used to scale when the user edits grams */
   baseGrams: number;
@@ -107,6 +118,14 @@ export function FoodScanner({ date }: { date: string }) {
           protein: Math.round(it.basePer.protein * ratio * 10) / 10,
           carbs: Math.round(it.basePer.carbs * ratio * 10) / 10,
           fat: Math.round(it.basePer.fat * ratio * 10) / 10,
+          calorieMin:
+            it.calorieMin != null
+              ? Math.round(it.calorieMin * ratio)
+              : undefined,
+          calorieMax:
+            it.calorieMax != null
+              ? Math.round(it.calorieMax * ratio)
+              : undefined,
         };
       }),
     );
@@ -324,6 +343,27 @@ export function FoodScanner({ date }: { date: string }) {
                         {it.include ? "✓" : "+"}
                       </button>
                     </div>
+                    {(it.confidence ||
+                      (it.calorieMin != null && it.calorieMax != null)) && (
+                      <div className="flex items-center gap-2 mb-2 text-[11px]">
+                        {it.confidence && (
+                          <span
+                            className="px-2 py-0.5 rounded-full font-medium"
+                            style={{
+                              background: CONF_BG[it.confidence],
+                              color: CONF_FG[it.confidence],
+                            }}
+                          >
+                            {it.confidence} confidence
+                          </span>
+                        )}
+                        {it.calorieMin != null && it.calorieMax != null && (
+                          <span className="text-[var(--muted)]">
+                            likely {it.calorieMin}–{it.calorieMax} kcal
+                          </span>
+                        )}
+                      </div>
+                    )}
                     <div className="grid grid-cols-5 gap-2 text-center text-xs">
                       <Field
                         label="grams"

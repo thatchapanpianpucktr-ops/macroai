@@ -67,6 +67,8 @@ export interface DayTotals {
   fat: number;
 }
 
+export type Confidence = "high" | "medium" | "low";
+
 /** A single food item returned by the vision model. */
 export interface AnalyzedItem {
   name: string;
@@ -75,6 +77,11 @@ export interface AnalyzedItem {
   protein: number;
   carbs: number;
   fat: number;
+  /** the model's self-reported confidence, driven by portion clarity */
+  confidence?: Confidence;
+  /** realistic calorie range given portion uncertainty */
+  calorieMin?: number;
+  calorieMax?: number;
 }
 
 export interface AnalyzeResponse {

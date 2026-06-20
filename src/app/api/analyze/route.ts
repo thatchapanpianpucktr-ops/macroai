@@ -15,16 +15,32 @@ const MODELS = [
   "gemini-flash-latest",
 ].filter((m): m is string => Boolean(m));
 
-const PROMPT = `You are a nutrition estimation assistant for a calorie-tracking app.
-Look at the food photo and identify each distinct food/drink item.
-For each item, estimate a realistic portion size in grams based on visual cues
-(plate size, utensils, packaging) and return its nutrition for THAT portion.
+const PROMPT = `You are a meticulous nutrition estimation assistant for a calorie-tracking app.
+Identify each distinct food or drink item in the photo. For composite dishes
+(stir-fries, salads, sandwiches, curries), break them into their main components
+when that improves accuracy.
+
+PORTION SIZE — reason from visual reference cues, don't just guess:
+- A dinner plate is ~26 cm across; a fork ~19 cm; a teaspoon ~5 ml, a tablespoon ~15 ml.
+- A standard soda can is 330 ml; a mug ~250 ml; a slice of bread ~30 g.
+- Compare the food's footprint and height to these references to estimate grams/volume.
+
+NUTRITION:
+- First estimate realistic per-100g values for the food, then scale to your portion.
+- Account for HIDDEN calories in cooked/restaurant food: cooking oil, butter, dressings,
+  sauces, and added sugar. Do not assume plain/dry unless it clearly is.
+- Enforce internal consistency: calories must be ≈ protein*4 + carbs*4 + fat*9 (within ~10%).
+  Reconcile the numbers until they agree.
+
+For EACH item also return:
+- "confidence": one of "high", "medium", "low" — driven mainly by how clear the portion is
+  and how identifiable the food is.
+- "calorieMin" and "calorieMax": a realistic calorie range reflecting portion uncertainty.
 
 Rules:
-- Calories must be roughly consistent with macros: calories ≈ protein*4 + carbs*4 + fat*9.
-- Be realistic, not optimistic. If unsure about portion, estimate the most likely typical serving.
+- Be realistic, not optimistic. When unsure about portion, choose the most likely typical serving.
 - If the image clearly contains no food, return an empty items array and a short note.
-- Round grams and calories to integers; macros to one decimal at most.`;
+- Round grams and calories to integers; macros to at most one decimal.`;
 
 const responseSchema = {
   type: SchemaType.OBJECT,
@@ -40,8 +56,25 @@ const responseSchema = {
           protein: { type: SchemaType.NUMBER },
           carbs: { type: SchemaType.NUMBER },
           fat: { type: SchemaType.NUMBER },
+          confidence: {
+            type: SchemaType.STRING,
+            format: "enum",
+            enum: ["high", "medium", "low"],
+          },
+          calorieMin: { type: SchemaType.NUMBER },
+          calorieMax: { type: SchemaType.NUMBER },
         },
-        required: ["name", "grams", "calories", "protein", "carbs", "fat"],
+        required: [
+          "name",
+          "grams",
+          "calories",
+          "protein",
+          "carbs",
+          "fat",
+          "confidence",
+          "calorieMin",
+          "calorieMax",
+        ],
       },
     },
     note: { type: SchemaType.STRING },
@@ -98,14 +131,42 @@ export async function POST(req: Request) {
       const text = result.response.text();
       const parsed = JSON.parse(text) as AnalyzeResponse;
 
-      parsed.items = (parsed.items || []).map((it) => ({
-        name: String(it.name ?? "Food"),
-        grams: Math.max(0, Math.round(Number(it.grams) || 0)),
-        calories: Math.max(0, Math.round(Number(it.calories) || 0)),
-        protein: Math.max(0, Math.round((Number(it.protein) || 0) * 10) / 10),
-        carbs: Math.max(0, Math.round((Number(it.carbs) || 0) * 10) / 10),
-        fat: Math.max(0, Math.round((Number(it.fat) || 0) * 10) / 10),
-      }));
+      parsed.items = (parsed.items || []).map((it) => {
+        const protein = Math.max(0, Math.round((Number(it.protein) || 0) * 10) / 10);
+        const carbs = Math.max(0, Math.round((Number(it.carbs) || 0) * 10) / 10);
+        const fat = Math.max(0, Math.round((Number(it.fat) || 0) * 10) / 10);
+        const macroKcal = Math.round(protein * 4 + carbs * 4 + fat * 9);
+        let calories = Math.max(0, Math.round(Number(it.calories) || 0));
+        // Reconcile: if calories are missing or wildly off from the macros,
+        // trust the macro-derived figure.
+        if (
+          macroKcal > 0 &&
+          (calories === 0 || Math.abs(calories - macroKcal) / macroKcal > 0.25)
+        ) {
+          calories = macroKcal;
+        }
+
+        const conf = String(it.confidence ?? "").toLowerCase();
+        const confidence =
+          conf === "high" || conf === "medium" || conf === "low"
+            ? (conf as "high" | "medium" | "low")
+            : undefined;
+
+        const num = (v: unknown) =>
+          Number.isFinite(Number(v)) ? Math.max(0, Math.round(Number(v))) : undefined;
+
+        return {
+          name: String(it.name ?? "Food"),
+          grams: Math.max(0, Math.round(Number(it.grams) || 0)),
+          calories,
+          protein,
+          carbs,
+          fat,
+          confidence,
+          calorieMin: num(it.calorieMin),
+          calorieMax: num(it.calorieMax),
+        };
+      });
 
       return NextResponse.json(parsed);
     } catch (err) {
