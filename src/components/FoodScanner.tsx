@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { downscale } from "@/lib/image";
 import { useApiKey, useFoods } from "@/lib/store";
+import { openApiKeyPrompt } from "@/lib/apikey-prompt";
 import { NumberInput } from "@/components/NumberInput";
 import type { AnalyzedItem, AnalyzeResponse } from "@/lib/types";
 
@@ -98,6 +99,11 @@ export function FoodScanner({ date }: { date: string }) {
   }
 
   async function analyze() {
+    // AI scanning needs the user's own key (no shared fallback).
+    if (!apiKey) {
+      openApiKeyPrompt();
+      return;
+    }
     // Image mode requires a photo; text mode requires a description.
     if (pending.length === 0 && !hint.trim()) {
       setError("Type what you ate first, e.g. “50g banana, 2 eggs”.");
@@ -293,6 +299,19 @@ export function FoodScanner({ date }: { date: string }) {
                 Cancel
               </button>
             </div>
+
+            {!apiKey && (
+              <button
+                onClick={openApiKeyPrompt}
+                className="w-full text-left rounded-xl p-3 mb-3 text-sm"
+                style={{
+                  background: "rgba(56,189,248,0.12)",
+                  color: "var(--accent-2)",
+                }}
+              >
+                AI scanning needs your own free Gemini key. Tap to add it →
+              </button>
+            )}
 
             {pending.length > 0 && (
               <div className="mb-3">

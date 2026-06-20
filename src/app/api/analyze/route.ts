@@ -129,14 +129,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  // Prefer the user's own key (bring-your-own-key); fall back to the server key.
-  const userKey = (body.apiKey ?? "").trim();
-  const apiKey = userKey || process.env.GEMINI_API_KEY;
+  // Every user must bring their own key — there is no shared fallback.
+  const apiKey = (body.apiKey ?? "").trim();
   if (!apiKey) {
     return NextResponse.json(
       {
         error:
-          "No Gemini API key available. Add your own free key in Settings to use AI scanning.",
+          "Add your own free Gemini API key in Settings to use AI scanning.",
       },
       { status: 400 },
     );
@@ -252,9 +251,8 @@ export async function POST(req: Request) {
       ) {
         return NextResponse.json(
           {
-            error: userKey
-              ? "Your Gemini API key was rejected. Double-check it in Settings (it should start with “AIza”)."
-              : "The server's Gemini key was rejected. Add your own free key in Settings.",
+            error:
+              "Your Gemini API key was rejected. Double-check it in Settings (it should start with “AIza”).",
           },
           { status: 401 },
         );
@@ -273,9 +271,8 @@ export async function POST(req: Request) {
   if (quotaBlocked) {
     return NextResponse.json(
       {
-        error: userKey
-          ? "Your Gemini key's quota is used up for now. Wait a minute (per-minute limit) or until tomorrow (daily limit), or enable billing for higher limits."
-          : "The shared Gemini quota is exhausted right now. Add your own free key in Settings to get your own quota, or try again later.",
+        error:
+          "Your Gemini key's quota is used up for now. Wait a minute (per-minute limit) or until ~2pm Bangkok time (daily limit), or enable billing on your key for higher limits.",
       },
       { status: 429 },
     );

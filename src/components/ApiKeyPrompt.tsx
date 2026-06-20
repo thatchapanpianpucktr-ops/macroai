@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useApiKey, useSettings } from "@/lib/store";
-
-const KEY = "macroai.keyPromptDismissed.v1";
+import { APIKEY_PROMPT_EVENT } from "@/lib/apikey-prompt";
 
 /**
- * One-time nudge (after onboarding) asking each person to add their OWN free
- * Gemini key, so AI scanning uses their quota instead of the shared key.
+ * Required key setup: AI scanning needs each person's OWN free Gemini key
+ * (there is no shared fallback). Re-appears after onboarding until a key is
+ * set, and can be opened on demand from the scanner / Settings.
  */
 export function ApiKeyPrompt() {
   const [settings] = useSettings();
@@ -15,26 +15,27 @@ export function ApiKeyPrompt() {
   const [show, setShow] = useState(false);
   const [draft, setDraft] = useState("");
 
+  // Auto-show after onboarding while no key is set.
   useEffect(() => {
-    if (typeof window === "undefined") return;
     if (!settings.onboarded) return; // don't interrupt onboarding
-    if (apiKey) return; // already using their own key
-    if (window.localStorage.getItem(KEY) === "1") return; // already decided
+    if (apiKey) return; // already has their own key
     setShow(true);
   }, [settings.onboarded, apiKey]);
 
-  if (!show) return null;
+  // Open on demand (e.g. from the scanner's "Add key" button).
+  useEffect(() => {
+    const open = () => setShow(true);
+    window.addEventListener(APIKEY_PROMPT_EVENT, open);
+    return () => window.removeEventListener(APIKEY_PROMPT_EVENT, open);
+  }, []);
 
-  function decided() {
-    if (typeof window !== "undefined") window.localStorage.setItem(KEY, "1");
-    setShow(false);
-  }
+  if (!show) return null;
 
   function saveKey() {
     const k = draft.trim();
     if (!k) return;
     setApiKey(k);
-    decided();
+    setShow(false);
   }
 
   const looksOff = draft.trim().length > 0 && !draft.trim().startsWith("AIza");
@@ -47,11 +48,10 @@ export function ApiKeyPrompt() {
           <h2 className="text-lg font-bold">Use your own AI key</h2>
         </div>
         <p className="text-sm text-[var(--muted)] mb-4">
-          Photo &amp; describe scanning uses Google Gemini. Add your own{" "}
-          <span style={{ color: "var(--foreground)" }}>free</span> key so you get your
-          own daily quota — otherwise scanning shares a key that runs out fast.
-          It’s stored only on your device. (Search &amp; barcode never need a
-          key.)
+          Photo &amp; describe scanning needs your own{" "}
+          <span style={{ color: "var(--foreground)" }}>free</span> Google Gemini
+          key — it gives you your own daily quota and is stored only on your
+          device. (Search &amp; barcode logging work without a key.)
         </p>
 
         <ol className="text-xs text-[var(--muted)] space-y-1 mb-3 list-decimal pl-4">
@@ -99,9 +99,9 @@ export function ApiKeyPrompt() {
         </button>
         <button
           className="w-full py-3 mt-1 text-sm text-[var(--muted)]"
-          onClick={decided}
+          onClick={() => setShow(false)}
         >
-          Use the shared key for now
+          Not now (Search &amp; barcode still work)
         </button>
       </div>
     </div>

@@ -345,10 +345,9 @@ export default function SettingsPage() {
           <div>
             <h2 className="font-semibold">AI scanning key</h2>
             <p className="text-xs text-[var(--muted)]">
-              Photo &amp; describe scanning uses Google Gemini. Add your own free
-              key to get your own quota — otherwise the app uses a shared key
-              that can run out. Stored only on this device and never included in
-              backups.
+              Photo &amp; describe scanning requires your own free Google Gemini
+              key — there is no shared key. Stored only on this device and never
+              included in backups. (Search &amp; barcode work without it.)
             </p>
           </div>
           <div className="flex gap-2">
@@ -379,7 +378,7 @@ export default function SettingsPage() {
               Get a free key →
             </a>
             <span className="text-xs text-[var(--muted)]">
-              {apiKey ? "Using your key ✓" : "Using shared key"}
+              {apiKey ? "Using your key ✓" : "No key — scanning disabled"}
             </span>
           </div>
         </section>
