@@ -4,6 +4,7 @@ import "./globals.css";
 import { BottomNav } from "@/components/BottomNav";
 import { ServiceWorker } from "@/components/ServiceWorker";
 import { WhatsNew } from "@/components/WhatsNew";
+import { ApiKeyPrompt } from "@/components/ApiKeyPrompt";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -49,6 +50,7 @@ export default function RootLayout({
         <BottomNav />
         <ServiceWorker />
         <WhatsNew />
+        <ApiKeyPrompt />
       </body>
     </html>
   );
