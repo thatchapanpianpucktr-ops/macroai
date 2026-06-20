@@ -3,6 +3,7 @@ import { Geist } from "next/font/google";
 import "./globals.css";
 import { BottomNav } from "@/components/BottomNav";
 import { ServiceWorker } from "@/components/ServiceWorker";
+import { WhatsNew } from "@/components/WhatsNew";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -47,6 +48,7 @@ export default function RootLayout({
         </main>
         <BottomNav />
         <ServiceWorker />
+        <WhatsNew />
       </body>
     </html>
   );
