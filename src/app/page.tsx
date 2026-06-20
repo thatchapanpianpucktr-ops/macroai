@@ -5,16 +5,20 @@ import { useMemo, useState } from "react";
 import { CalorieRing, MacroBar } from "@/components/Progress";
 import { FoodScanner } from "@/components/FoodScanner";
 import { FoodEditSheet } from "@/components/FoodEditSheet";
+import { QuickAdd } from "@/components/QuickAdd";
 import { useFoods, useSettings, useWeights } from "@/lib/store";
 import { currentWeight, estimateTDEE, resolveTargets } from "@/lib/tdee";
-import { todayYmd, ymdToLabel } from "@/lib/date";
+import { addDaysYmd, todayYmd, ymdToLabel } from "@/lib/date";
 
 export default function TodayPage() {
   const [settings] = useSettings();
   const { foods, remove, update } = useFoods();
   const { weights } = useWeights();
-  const date = todayYmd();
+  const today = todayYmd(settings.timeZone);
+  const [date, setDate] = useState(today);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const isToday = date === today;
+  const isFuture = date >= today;
 
   const tdee = useMemo(
     () => estimateTDEE(settings, weights, foods),
@@ -26,8 +30,8 @@ export default function TodayPage() {
     [settings, tdee.tdee, weight],
   );
 
-  const today = foods.filter((f) => f.date === date);
-  const totals = today.reduce(
+  const dayFoods = foods.filter((f) => f.date === date);
+  const totals = dayFoods.reduce(
     (a, f) => ({
       calories: a.calories + f.calories,
       protein: a.protein + f.protein,
@@ -56,15 +60,33 @@ export default function TodayPage() {
 
   return (
     <div className="space-y-5">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold">Today</h1>
-          <p className="text-sm text-[var(--muted)]">{ymdToLabel(date)}</p>
+      <header className="flex items-center justify-between gap-2">
+        <button
+          className="w-9 h-9 rounded-full bg-[var(--surface-2)] grid place-items-center text-lg shrink-0"
+          onClick={() => setDate((d) => addDaysYmd(d, -1))}
+          aria-label="Previous day"
+        >
+          ‹
+        </button>
+        <div className="text-center flex-1 min-w-0">
+          <h1 className="text-lg font-bold truncate">
+            {isToday ? "Today" : ymdToLabel(date)}
+          </h1>
+          <button
+            className="text-xs text-[var(--muted)]"
+            onClick={() => setDate(today)}
+          >
+            {isToday ? `Est. ${tdee.tdee} kcal/day` : "jump to today"}
+          </button>
         </div>
-        <div className="text-right">
-          <div className="text-xs text-[var(--muted)]">Est. expenditure</div>
-          <div className="font-semibold tabular-nums">{tdee.tdee} kcal</div>
-        </div>
+        <button
+          className="w-9 h-9 rounded-full bg-[var(--surface-2)] grid place-items-center text-lg shrink-0 disabled:opacity-30"
+          onClick={() => setDate((d) => addDaysYmd(d, 1))}
+          disabled={isFuture}
+          aria-label="Next day"
+        >
+          ›
+        </button>
       </header>
 
       <section className="card p-5 flex flex-col items-center">
@@ -93,6 +115,8 @@ export default function TodayPage() {
 
       <FoodScanner date={date} />
 
+      <QuickAdd date={date} />
+
       {settings.useCustomTargets ? (
         <p className="text-xs text-[var(--muted)] text-center px-4">
           Using your manual targets. Change them in Settings.
@@ -108,14 +132,14 @@ export default function TodayPage() {
 
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-[var(--muted)]">
-          Logged today ({today.length})
+          {isToday ? "Logged today" : "Logged"} ({dayFoods.length})
         </h2>
-        {today.length === 0 && (
+        {dayFoods.length === 0 && (
           <div className="card p-6 text-center text-sm text-[var(--muted)]">
-            Nothing logged yet. Tap “Scan food” to start.
+            Nothing logged yet. Take a photo, describe it, or add manually.
           </div>
         )}
-        {today.map((f) => (
+        {dayFoods.map((f) => (
           <button
             key={f.id}
             onClick={() => setEditingId(f.id)}
@@ -149,7 +173,7 @@ export default function TodayPage() {
       </section>
 
       <FoodEditSheet
-        entry={today.find((f) => f.id === editingId) ?? null}
+        entry={dayFoods.find((f) => f.id === editingId) ?? null}
         onClose={() => setEditingId(null)}
         onSave={(id, patch) => update(id, patch)}
         onDelete={(id) => remove(id)}

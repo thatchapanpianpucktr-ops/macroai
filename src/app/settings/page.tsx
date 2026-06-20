@@ -1,13 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useSettings, useWeights } from "@/lib/store";
+import { useSettings, useWeights, exportAll, importAll } from "@/lib/store";
 import { currentWeight, estimateTDEE, resolveTargets } from "@/lib/tdee";
-import { todayYmd } from "@/lib/date";
+import { todayYmd, TIMEZONE_OPTIONS } from "@/lib/date";
 import { useFoods } from "@/lib/store";
 import { NumberInput } from "@/components/NumberInput";
-import { useMemo, useState } from "react";
+import { CHANGELOG } from "@/lib/changelog";
+import { useMemo, useRef, useState } from "react";
 import type { ActivityLevel, Goal, Sex } from "@/lib/types";
+
+const WHATS_NEW_KEY = "macroai.lastSeenBuild.v1";
 
 const ACTIVITY_LABELS: Record<ActivityLevel, string> = {
   sedentary: "Sedentary (little/no exercise)",
@@ -37,11 +40,52 @@ export default function SettingsPage() {
     [settings, tdee.tdee, weight, startWeight],
   );
 
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [backupMsg, setBackupMsg] = useState<string | null>(null);
+
   function finishOnboarding() {
     const w = parseFloat(startWeight);
-    if (w && !weight) setWeight(todayYmd(), w);
+    if (w && !weight) setWeight(todayYmd(settings.timeZone), w);
     update({ onboarded: true });
     router.push("/");
+  }
+
+  function exportData() {
+    const blob = new Blob([JSON.stringify(exportAll(), null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `macroai-backup-${todayYmd(settings.timeZone)}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    setBackupMsg("Backup downloaded.");
+  }
+
+  async function onImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      const replace = window.confirm(
+        "Replace all current data with this backup?\n\nOK = replace everything.\nCancel = merge (keep current + add from file).",
+      );
+      const res = importAll(data, replace ? "replace" : "merge");
+      setBackupMsg(
+        `Restored — ${res.foods} food entries, ${res.weights} weigh-ins.`,
+      );
+    } catch {
+      setBackupMsg("Couldn't read that file — is it a MacroAI backup?");
+    }
+  }
+
+  function reopenWhatsNew() {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(WHATS_NEW_KEY, "0");
+      window.location.reload();
+    }
   }
 
   return (
@@ -114,6 +158,20 @@ export default function SettingsPage() {
             {Object.entries(ACTIVITY_LABELS).map(([k, v]) => (
               <option key={k} value={k}>
                 {v}
+              </option>
+            ))}
+          </select>
+        </Labeled>
+
+        <Labeled label="Timezone (defines your “day”)">
+          <select
+            className="input"
+            value={settings.timeZone}
+            onChange={(e) => update({ timeZone: e.target.value })}
+          >
+            {TIMEZONE_OPTIONS.map((t) => (
+              <option key={t.value || "auto"} value={t.value}>
+                {t.label}
               </option>
             ))}
           </select>
@@ -277,6 +335,55 @@ export default function SettingsPage() {
             : "starting estimate"}
         </p>
       </section>
+
+      {settings.onboarded && (
+        <section className="card p-4 space-y-3">
+          <div>
+            <h2 className="font-semibold">Backup &amp; restore</h2>
+            <p className="text-xs text-[var(--muted)]">
+              Your data lives only on this device. Export a backup so you don’t
+              lose it, or import it onto another phone.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <button className="btn btn-ghost py-3" onClick={exportData}>
+              Export backup
+            </button>
+            <button
+              className="btn btn-ghost py-3"
+              onClick={() => fileRef.current?.click()}
+            >
+              Import backup
+            </button>
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={onImportFile}
+          />
+          {backupMsg && (
+            <p className="text-xs" style={{ color: "var(--accent)" }}>
+              {backupMsg}
+            </p>
+          )}
+        </section>
+      )}
+
+      {settings.onboarded && (
+        <section className="card p-4 flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold">About</h2>
+            <p className="text-xs text-[var(--muted)]">
+              MacroAI v{CHANGELOG[0].version}
+            </p>
+          </div>
+          <button className="btn btn-ghost px-4 py-2 text-sm" onClick={reopenWhatsNew}>
+            What’s new
+          </button>
+        </section>
+      )}
 
       {!settings.onboarded ? (
         <button

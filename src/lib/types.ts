@@ -21,6 +21,8 @@ export interface Settings {
   /** fraction of calories from fat (0-1) */
   fatPctOfCalories: number;
   unit: "metric" | "imperial";
+  /** IANA timezone for deciding the calendar "day"; "" = use device timezone */
+  timeZone: string;
   /** when true, use the user-entered targets below instead of the adaptive calculation */
   useCustomTargets: boolean;
   customCalories: number;
@@ -100,6 +102,7 @@ export const DEFAULT_SETTINGS: Settings = {
   proteinPerKg: 1.8,
   fatPctOfCalories: 0.27,
   unit: "metric",
+  timeZone: "",
   useCustomTargets: false,
   customCalories: 2000,
   customProtein: 150,

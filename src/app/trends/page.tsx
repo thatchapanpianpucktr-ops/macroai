@@ -9,8 +9,7 @@ import {
   estimateTDEE,
   resolveTargets,
 } from "@/lib/tdee";
-
-const DAY = 86400000;
+import { addDaysYmd, todayYmd } from "@/lib/date";
 
 export default function TrendsPage() {
   const [settings] = useSettings();
@@ -27,20 +26,18 @@ export default function TrendsPage() {
     [settings, tdee.tdee, weight],
   );
 
-  // Daily calories over the last 21 days.
+  // Daily calories over the last 21 days (timezone-aware).
   const days = useMemo(() => {
     const map = new Map<string, number>();
     for (const f of foods) map.set(f.date, (map.get(f.date) ?? 0) + f.calories);
     const out: { date: string; kcal: number }[] = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = todayYmd(settings.timeZone);
     for (let i = 20; i >= 0; i--) {
-      const d = new Date(today.getTime() - i * DAY);
-      const ymd = d.toISOString().slice(0, 10);
+      const ymd = addDaysYmd(today, -i);
       out.push({ date: ymd, kcal: Math.round(map.get(ymd) ?? 0) });
     }
     return out;
-  }, [foods]);
+  }, [foods, settings.timeZone]);
 
   const logged = days.filter((d) => d.kcal > 0);
   const avgIntake =
@@ -50,8 +47,6 @@ export default function TrendsPage() {
 
   const dailyBalance = avgIntake > 0 ? avgIntake - tdee.tdee : 0;
   const projectedWeekly = (dailyBalance * 7) / KCAL_PER_KG;
-
-  const t0 = days.length ? new Date(days[0].date).getTime() : 0;
 
   return (
     <div className="space-y-5">

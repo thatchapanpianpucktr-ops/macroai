@@ -2,13 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { LineChart } from "@/components/LineChart";
-import { useWeights } from "@/lib/store";
+import { useSettings, useWeights } from "@/lib/store";
 import { weightTrend } from "@/lib/tdee";
 import { todayYmd, ymdToLabel } from "@/lib/date";
 
 export default function WeightPage() {
+  const [settings] = useSettings();
   const { weights, setWeight, remove } = useWeights();
-  const [date, setDate] = useState(todayYmd());
+  const tz = settings.timeZone;
+  const [date, setDate] = useState(todayYmd(tz));
   const [kg, setKg] = useState("");
 
   const sorted = useMemo(
@@ -102,7 +104,7 @@ export default function WeightPage() {
             type="date"
             className="input flex-1"
             value={date}
-            max={todayYmd()}
+            max={todayYmd(tz)}
             onChange={(e) => setDate(e.target.value)}
           />
           <input

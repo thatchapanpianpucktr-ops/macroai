@@ -156,8 +156,58 @@ export function useWeights(): {
 
 export function exportAll() {
   return {
+    app: "macroai",
+    version: 1,
+    exportedAt: new Date().toISOString(),
     settings: read<Settings>("settings", DEFAULT_SETTINGS),
     foods: read<FoodEntry[]>("foods", []),
     weights: read<WeightEntry[]>("weights", []),
   };
+}
+
+export type BackupShape = {
+  settings?: Partial<Settings>;
+  foods?: FoodEntry[];
+  weights?: WeightEntry[];
+};
+
+/**
+ * Restore data from a backup object. `mode` "replace" overwrites everything;
+ * "merge" keeps existing food/weight entries and adds non-duplicate ones.
+ * Returns a small summary for the UI.
+ */
+export function importAll(
+  data: BackupShape,
+  mode: "replace" | "merge" = "replace",
+): { foods: number; weights: number } {
+  if (typeof window === "undefined") return { foods: 0, weights: 0 };
+  if (!data || typeof data !== "object") throw new Error("Invalid backup file");
+
+  const incomingFoods = Array.isArray(data.foods) ? data.foods : [];
+  const incomingWeights = Array.isArray(data.weights) ? data.weights : [];
+
+  if (data.settings && typeof data.settings === "object") {
+    const current = read<Settings>("settings", DEFAULT_SETTINGS);
+    write("settings", { ...DEFAULT_SETTINGS, ...current, ...data.settings });
+  }
+
+  if (mode === "replace") {
+    write("foods", incomingFoods);
+    write("weights", incomingWeights);
+    return { foods: incomingFoods.length, weights: incomingWeights.length };
+  }
+
+  // merge
+  const curFoods = read<FoodEntry[]>("foods", []);
+  const foodIds = new Set(curFoods.map((f) => f.id));
+  const mergedFoods = [...curFoods];
+  for (const f of incomingFoods) if (f?.id && !foodIds.has(f.id)) mergedFoods.push(f);
+
+  const curWeights = read<WeightEntry[]>("weights", []);
+  const weightDates = new Map(curWeights.map((w) => [w.date, w]));
+  for (const w of incomingWeights) if (w?.date) weightDates.set(w.date, w);
+
+  write("foods", mergedFoods);
+  write("weights", Array.from(weightDates.values()));
+  return { foods: mergedFoods.length, weights: weightDates.size };
 }
