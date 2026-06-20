@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import { CalorieRing, MacroBar } from "@/components/Progress";
 import { FoodScanner } from "@/components/FoodScanner";
 import { useFoods, useSettings, useWeights } from "@/lib/store";
-import { computeTargets, currentWeight, estimateTDEE } from "@/lib/tdee";
+import { currentWeight, estimateTDEE, resolveTargets } from "@/lib/tdee";
 import { todayYmd, ymdToLabel } from "@/lib/date";
 
 export default function TodayPage() {
@@ -20,7 +20,7 @@ export default function TodayPage() {
   );
   const weight = useMemo(() => currentWeight(weights), [weights]);
   const targets = useMemo(
-    () => computeTargets(settings, tdee.tdee, weight),
+    () => resolveTargets(settings, tdee.tdee, weight),
     [settings, tdee.tdee, weight],
   );
 
@@ -91,11 +91,17 @@ export default function TodayPage() {
 
       <FoodScanner date={date} />
 
-      {tdee.method === "formula" && (
+      {settings.useCustomTargets ? (
         <p className="text-xs text-[var(--muted)] text-center px-4">
-          Targets use a starting estimate. Log food &amp; weight for ~1 week and
-          they’ll adapt to your real metabolism.
+          Using your manual targets. Change them in Settings.
         </p>
+      ) : (
+        tdee.method === "formula" && (
+          <p className="text-xs text-[var(--muted)] text-center px-4">
+            Targets use a starting estimate. Log food &amp; weight for ~1 week and
+            they’ll adapt to your real metabolism.
+          </p>
+        )
       )}
 
       <section className="space-y-2">

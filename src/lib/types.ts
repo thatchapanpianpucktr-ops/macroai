@@ -21,6 +21,12 @@ export interface Settings {
   /** fraction of calories from fat (0-1) */
   fatPctOfCalories: number;
   unit: "metric" | "imperial";
+  /** when true, use the user-entered targets below instead of the adaptive calculation */
+  useCustomTargets: boolean;
+  customCalories: number;
+  customProtein: number;
+  customCarbs: number;
+  customFat: number;
 }
 
 export interface WeightEntry {
@@ -87,4 +93,9 @@ export const DEFAULT_SETTINGS: Settings = {
   proteinPerKg: 1.8,
   fatPctOfCalories: 0.27,
   unit: "metric",
+  useCustomTargets: false,
+  customCalories: 2000,
+  customProtein: 150,
+  customCarbs: 200,
+  customFat: 60,
 };

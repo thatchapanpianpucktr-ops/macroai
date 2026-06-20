@@ -159,6 +159,26 @@ export function estimateTDEE(
   };
 }
 
+/**
+ * The targets the app should actually use: the user's manual override when
+ * enabled, otherwise the adaptive calculation.
+ */
+export function resolveTargets(
+  settings: Settings,
+  tdee: number,
+  weightKg: number | null,
+): MacroTargets {
+  if (settings.useCustomTargets) {
+    return {
+      calories: Math.max(0, Math.round(settings.customCalories)),
+      protein: Math.max(0, Math.round(settings.customProtein)),
+      carbs: Math.max(0, Math.round(settings.customCarbs)),
+      fat: Math.max(0, Math.round(settings.customFat)),
+    };
+  }
+  return computeTargets(settings, tdee, weightKg);
+}
+
 /** Daily calorie + macro targets given the current TDEE estimate. */
 export function computeTargets(
   settings: Settings,

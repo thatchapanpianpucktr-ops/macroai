@@ -5,9 +5,9 @@ import { LineChart } from "@/components/LineChart";
 import { useFoods, useSettings, useWeights } from "@/lib/store";
 import {
   KCAL_PER_KG,
-  computeTargets,
   currentWeight,
   estimateTDEE,
+  resolveTargets,
 } from "@/lib/tdee";
 
 const DAY = 86400000;
@@ -23,7 +23,7 @@ export default function TrendsPage() {
   );
   const weight = useMemo(() => currentWeight(weights), [weights]);
   const targets = useMemo(
-    () => computeTargets(settings, tdee.tdee, weight),
+    () => resolveTargets(settings, tdee.tdee, weight),
     [settings, tdee.tdee, weight],
   );
 

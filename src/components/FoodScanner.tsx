@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { downscale } from "@/lib/image";
 import { useFoods } from "@/lib/store";
+import { NumberInput } from "@/components/NumberInput";
 import type { AnalyzedItem, AnalyzeResponse } from "@/lib/types";
 
 interface DraftItem extends AnalyzedItem {
@@ -22,6 +23,12 @@ export function FoodScanner({ date }: { date: string }) {
   const [thumb, setThumb] = useState<string | null>(null);
   const [items, setItems] = useState<DraftItem[]>([]);
   const [note, setNote] = useState<string | null>(null);
+  // The captured photo, held so the user can add a description before analyzing.
+  const [pending, setPending] = useState<{ base64: string; mimeType: string } | null>(
+    null,
+  );
+  const [hint, setHint] = useState("");
+  const [analyzed, setAnalyzed] = useState(false);
 
   function reset() {
     setItems([]);
@@ -29,23 +36,40 @@ export function FoodScanner({ date }: { date: string }) {
     setError(null);
     setNote(null);
     setLoading(false);
+    setPending(null);
+    setHint("");
+    setAnalyzed(false);
   }
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    setOpen(true);
     reset();
-    setLoading(true);
+    setOpen(true);
     try {
       const big = await downscale(file, 1024);
       const small = await downscale(file, 120, 0.7);
       setThumb(small.dataUrl);
+      setPending({ base64: big.base64, mimeType: big.mimeType });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't read that photo.");
+    }
+  }
+
+  async function analyze() {
+    if (!pending) return;
+    setLoading(true);
+    setError(null);
+    try {
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64: big.base64, mimeType: big.mimeType }),
+        body: JSON.stringify({
+          imageBase64: pending.base64,
+          mimeType: pending.mimeType,
+          hint: hint.trim() || undefined,
+        }),
       });
       const data = (await res.json()) as AnalyzeResponse & { error?: string };
       if (!res.ok) throw new Error(data.error || "Analysis failed");
@@ -63,6 +87,7 @@ export function FoodScanner({ date }: { date: string }) {
           include: true,
         })),
       );
+      setAnalyzed(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -210,11 +235,43 @@ export function FoodScanner({ date }: { date: string }) {
             </div>
 
             {thumb && (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={thumb}
                 alt="food"
                 className="w-full h-36 object-cover rounded-xl mb-3"
               />
+            )}
+
+            {/* Describe the food to the AI before (or after) analyzing. */}
+            {pending && (
+              <div className="mb-3">
+                <label className="text-xs text-[var(--muted)] mb-1 block">
+                  Tell the AI what this is (optional)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    className="input flex-1"
+                    placeholder="e.g. chicken pad thai, large plate"
+                    value={hint}
+                    onChange={(e) => setHint(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !loading) analyze();
+                    }}
+                  />
+                  <button
+                    className="btn btn-primary px-4 disabled:opacity-50"
+                    onClick={analyze}
+                    disabled={loading}
+                  >
+                    {analyzed ? "Redo" : "Analyze"}
+                  </button>
+                </div>
+                <p className="text-[11px] text-[var(--muted)] mt-1">
+                  Adding the dish name and rough size makes the estimate more
+                  accurate. Tap {analyzed ? "Redo" : "Analyze"} to (re)scan.
+                </p>
+              </div>
             )}
 
             {loading && (
@@ -351,12 +408,12 @@ function Field({
 }) {
   return (
     <label className="flex flex-col gap-1">
-      <input
-        type="number"
-        inputMode="decimal"
+      <NumberInput
         className="input py-1.5 text-center text-sm"
-        value={Number.isFinite(value) ? value : 0}
-        onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+        value={value}
+        onChange={onChange}
+        selectOnFocus
+        aria-label={label}
       />
       <span className="text-[10px] text-[var(--muted)]">{label}</span>
     </label>

@@ -2,9 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useSettings, useWeights } from "@/lib/store";
-import { computeTargets, currentWeight, estimateTDEE } from "@/lib/tdee";
+import { currentWeight, estimateTDEE, resolveTargets } from "@/lib/tdee";
 import { todayYmd } from "@/lib/date";
 import { useFoods } from "@/lib/store";
+import { NumberInput } from "@/components/NumberInput";
 import { useMemo, useState } from "react";
 import type { ActivityLevel, Goal, Sex } from "@/lib/types";
 
@@ -32,7 +33,7 @@ export default function SettingsPage() {
     [settings, weights, foods],
   );
   const targets = useMemo(
-    () => computeTargets(settings, tdee.tdee, weight ?? (parseFloat(startWeight) || null)),
+    () => resolveTargets(settings, tdee.tdee, weight ?? (parseFloat(startWeight) || null)),
     [settings, tdee.tdee, weight, startWeight],
   );
 
@@ -67,24 +68,22 @@ export default function SettingsPage() {
             </select>
           </Labeled>
           <Labeled label="Age">
-            <input
-              type="number"
+            <NumberInput
               className="input"
               value={settings.age}
-              onChange={(e) => update({ age: parseInt(e.target.value) || 0 })}
+              onChange={(v) => update({ age: Math.round(v) })}
+              selectOnFocus
             />
           </Labeled>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <Labeled label="Height (cm)">
-            <input
-              type="number"
+            <NumberInput
               className="input"
               value={settings.heightCm}
-              onChange={(e) =>
-                update({ heightCm: parseInt(e.target.value) || 0 })
-              }
+              onChange={(v) => update({ heightCm: Math.round(v) })}
+              selectOnFocus
             />
           </Labeled>
           <Labeled label={weight ? "Current weight (kg)" : "Start weight (kg)"}>
@@ -193,8 +192,78 @@ export default function SettingsPage() {
         </Labeled>
       </section>
 
+      <section className="card p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold">Set targets manually</h2>
+            <p className="text-xs text-[var(--muted)]">
+              Use your own numbers instead of the adaptive calculation.
+            </p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={settings.useCustomTargets}
+            onClick={() => update({ useCustomTargets: !settings.useCustomTargets })}
+            className="relative w-12 h-7 rounded-full transition-colors shrink-0"
+            style={{
+              background: settings.useCustomTargets
+                ? "var(--accent)"
+                : "var(--surface-2)",
+            }}
+          >
+            <span
+              className="absolute top-1 left-1 w-5 h-5 rounded-full bg-white transition-transform"
+              style={{
+                transform: settings.useCustomTargets
+                  ? "translateX(20px)"
+                  : "translateX(0)",
+              }}
+            />
+          </button>
+        </div>
+
+        {settings.useCustomTargets && (
+          <div className="grid grid-cols-2 gap-3">
+            <Labeled label="Calories (kcal)">
+              <NumberInput
+                className="input"
+                value={settings.customCalories}
+                onChange={(v) => update({ customCalories: v })}
+                selectOnFocus
+              />
+            </Labeled>
+            <Labeled label="Protein (g)">
+              <NumberInput
+                className="input"
+                value={settings.customProtein}
+                onChange={(v) => update({ customProtein: v })}
+                selectOnFocus
+              />
+            </Labeled>
+            <Labeled label="Carbs (g)">
+              <NumberInput
+                className="input"
+                value={settings.customCarbs}
+                onChange={(v) => update({ customCarbs: v })}
+                selectOnFocus
+              />
+            </Labeled>
+            <Labeled label="Fat (g)">
+              <NumberInput
+                className="input"
+                value={settings.customFat}
+                onChange={(v) => update({ customFat: v })}
+                selectOnFocus
+              />
+            </Labeled>
+          </div>
+        )}
+      </section>
+
       <section className="card p-4">
-        <h2 className="font-semibold mb-3">Your daily targets</h2>
+        <h2 className="font-semibold mb-3">
+          {settings.useCustomTargets ? "Your manual targets" : "Your daily targets"}
+        </h2>
         <div className="grid grid-cols-4 gap-2 text-center">
           <Stat label="kcal" value={targets.calories} />
           <Stat label="protein" value={`${targets.protein}g`} />
