@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 // Newest first. Bump `build` whenever you want the popup to show again.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    build: 4,
+    version: "1.3",
+    date: "2026-06-20",
+    title: "Multi-photo scanning",
+    items: [
+      "Add several photos to one scan — e.g. the front, the back, and the nutrition label.",
+      "Works for both the camera and gallery uploads; they’re analyzed together as one item.",
+      "The AI reads visible nutrition labels for more accurate numbers.",
+    ],
+  },
+  {
     build: 3,
     version: "1.2",
     date: "2026-06-20",

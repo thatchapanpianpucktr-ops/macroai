@@ -16,9 +16,16 @@ const MODELS = [
 ].filter((m): m is string => Boolean(m));
 
 const PROMPT = `You are a meticulous nutrition estimation assistant for a calorie-tracking app.
-Identify each distinct food or drink item in the photo. For composite dishes
+Identify each distinct food or drink item in the photo(s). For composite dishes
 (stir-fries, salads, sandwiches, curries), break them into their main components
 when that improves accuracy.
+
+MULTIPLE PHOTOS: You may receive several photos of the SAME meal or product
+(e.g. the front of a package and its nutrition label, or the same plate from
+different angles). Treat all photos together as ONE submission describing the
+same food. Use the clearest views, and if a nutrition-facts label or ingredient
+list is visible, prefer those exact numbers. NEVER count the same item more than
+once just because it appears in multiple photos.
 
 PORTION SIZE — reason from visual reference cues, don't just guess:
 - A dinner plate is ~26 cm across; a fork ~19 cm; a teaspoon ~5 ml, a tablespoon ~15 ml.
@@ -119,6 +126,7 @@ export async function POST(req: Request) {
   let body: {
     imageBase64?: string;
     mimeType?: string;
+    images?: { base64?: string; mimeType?: string }[];
     hint?: string;
     description?: string;
   };
@@ -129,8 +137,19 @@ export async function POST(req: Request) {
   }
 
   const { imageBase64, mimeType, hint, description } = body;
-  const hasImage = Boolean(imageBase64 && mimeType);
   const desc = (description ?? "").trim();
+
+  // Accept either a list of images or the legacy single-image fields.
+  const images = (Array.isArray(body.images) ? body.images : [])
+    .filter(
+      (im): im is { base64: string; mimeType: string } =>
+        Boolean(im?.base64 && im?.mimeType),
+    )
+    .slice(0, 6);
+  if (images.length === 0 && imageBase64 && mimeType) {
+    images.push({ base64: imageBase64, mimeType });
+  }
+  const hasImage = images.length > 0;
 
   if (!hasImage && !desc) {
     return NextResponse.json(
@@ -140,11 +159,22 @@ export async function POST(req: Request) {
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
+  const multiNote =
+    images.length > 1
+      ? `\n\nThese ${images.length} photos all show the SAME food/meal — combine them into one set of items, do not double count.`
+      : "";
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parts: any[] = hasImage
     ? [
-        { text: PROMPT + (hint ? `\n\nUser hint about the food: ${hint}` : "") },
-        { inlineData: { data: imageBase64, mimeType } },
+        {
+          text:
+            PROMPT +
+            multiNote +
+            (hint ? `\n\nUser hint about the food: ${hint}` : ""),
+        },
+        ...images.map((im) => ({
+          inlineData: { data: im.base64, mimeType: im.mimeType },
+        })),
       ]
     : [{ text: `${TEXT_PROMPT}\n\nThe user ate:\n${desc}` }];
 

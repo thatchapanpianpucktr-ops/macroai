@@ -31,62 +31,90 @@ export function FoodScanner({ date }: { date: string }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [thumb, setThumb] = useState<string | null>(null);
   const [items, setItems] = useState<DraftItem[]>([]);
   const [note, setNote] = useState<string | null>(null);
-  // The captured photo, held so the user can add a description before analyzing.
-  const [pending, setPending] = useState<{ base64: string; mimeType: string } | null>(
-    null,
-  );
+  // Captured/uploaded photos, held so the user can add more + a description
+  // before analyzing. Multiple photos (front, back, label) are analyzed together.
+  const [pending, setPending] = useState<
+    { base64: string; mimeType: string; thumb: string }[]
+  >([]);
   const [hint, setHint] = useState("");
   const [analyzed, setAnalyzed] = useState(false);
   // Manual mode = opened via "Add manually" (text description / hand entry, no photo).
   const [manual, setManual] = useState(false);
 
+  const cover = pending[0]?.thumb ?? null;
+
   function reset() {
     setItems([]);
-    setThumb(null);
     setError(null);
     setNote(null);
     setLoading(false);
-    setPending(null);
+    setPending([]);
     setHint("");
     setAnalyzed(false);
     setManual(false);
   }
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files ?? []);
     e.target.value = "";
-    if (!file) return;
-    reset();
-    setOpen(true);
-    try {
-      const big = await downscale(file, 1024);
-      const small = await downscale(file, 120, 0.7);
-      setThumb(small.dataUrl);
-      setPending({ base64: big.base64, mimeType: big.mimeType });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't read that photo.");
+    if (files.length === 0) return;
+    // Starting fresh from the home screen vs. adding more inside the modal.
+    if (!open) {
+      reset();
+      setOpen(true);
     }
+    setManual(false);
+    setAnalyzed(false);
+    for (const file of files) {
+      try {
+        const big = await downscale(file, 1024);
+        const small = await downscale(file, 120, 0.7);
+        setPending((prev) =>
+          prev.length >= 6
+            ? prev
+            : [
+                ...prev,
+                {
+                  base64: big.base64,
+                  mimeType: big.mimeType,
+                  thumb: small.dataUrl,
+                },
+              ],
+        );
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Couldn't read that photo.",
+        );
+      }
+    }
+  }
+
+  function removePhoto(idx: number) {
+    setPending((prev) => prev.filter((_, i) => i !== idx));
+    setAnalyzed(false);
   }
 
   async function analyze() {
     // Image mode requires a photo; text mode requires a description.
-    if (!pending && !hint.trim()) {
+    if (pending.length === 0 && !hint.trim()) {
       setError("Type what you ate first, e.g. “50g banana, 2 eggs”.");
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      const payload = pending
-        ? {
-            imageBase64: pending.base64,
-            mimeType: pending.mimeType,
-            hint: hint.trim() || undefined,
-          }
-        : { description: hint.trim() };
+      const payload =
+        pending.length > 0
+          ? {
+              images: pending.map((p) => ({
+                base64: p.base64,
+                mimeType: p.mimeType,
+              })),
+              hint: hint.trim() || undefined,
+            }
+          : { description: hint.trim() };
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -177,7 +205,7 @@ export function FoodScanner({ date }: { date: string }) {
           fat: it.fat,
           grams: it.grams,
           source: "ai",
-          thumb: thumb ?? undefined,
+          thumb: cover ?? undefined,
         });
       });
     setOpen(false);
@@ -190,7 +218,7 @@ export function FoodScanner({ date }: { date: string }) {
 
   return (
     <>
-      {/* Camera (rear) on phones; ignored on desktop. */}
+      {/* Camera (rear) on phones; ignored on desktop. One shot at a time. */}
       <input
         ref={cameraRef}
         type="file"
@@ -199,11 +227,12 @@ export function FoodScanner({ date }: { date: string }) {
         className="hidden"
         onChange={onFile}
       />
-      {/* Pick an existing photo from the gallery / file system. */}
+      {/* Pick one or more existing photos from the gallery / file system. */}
       <input
         ref={libraryRef}
         type="file"
         accept="image/*"
+        multiple
         className="hidden"
         onChange={onFile}
       />
@@ -263,17 +292,52 @@ export function FoodScanner({ date }: { date: string }) {
               </button>
             </div>
 
-            {thumb && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={thumb}
-                alt="food"
-                className="w-full h-36 object-cover rounded-xl mb-3"
-              />
+            {pending.length > 0 && (
+              <div className="mb-3">
+                <div className="grid grid-cols-4 gap-2">
+                  {pending.map((p, i) => (
+                    <div key={i} className="relative aspect-square">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={p.thumb}
+                        alt={`photo ${i + 1}`}
+                        className="w-full h-full object-cover rounded-lg"
+                      />
+                      <button
+                        onClick={() => removePhoto(i)}
+                        className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-black/80 text-white text-xs grid place-items-center"
+                        aria-label="Remove photo"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  {pending.length < 6 && (
+                    <div className="grid grid-rows-2 gap-1 aspect-square">
+                      <button
+                        onClick={() => cameraRef.current?.click()}
+                        className="rounded-lg bg-[var(--surface-2)] grid place-items-center text-[10px] text-[var(--muted)]"
+                      >
+                        + Camera
+                      </button>
+                      <button
+                        onClick={() => libraryRef.current?.click()}
+                        className="rounded-lg bg-[var(--surface-2)] grid place-items-center text-[10px] text-[var(--muted)]"
+                      >
+                        + Upload
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <p className="text-[11px] text-[var(--muted)] mt-1.5">
+                  Add front, back &amp; the nutrition label for a more accurate
+                  estimate — they’re analyzed together as one item.
+                </p>
+              </div>
             )}
 
             {/* Describe the food to the AI before (or after) analyzing. */}
-            {pending && (
+            {pending.length > 0 && (
               <div className="mb-3">
                 <label className="text-xs text-[var(--muted)] mb-1 block">
                   Tell the AI what this is (optional)
