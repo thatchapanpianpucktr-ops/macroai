@@ -42,6 +42,31 @@ Rules:
 - If the image clearly contains no food, return an empty items array and a short note.
 - Round grams and calories to integers; macros to at most one decimal.`;
 
+const TEXT_PROMPT = `You are a meticulous nutrition estimation assistant for a calorie-tracking app.
+The user describes in words what they ate (e.g. "50g banana, 2 boiled eggs, a cup of rice").
+Identify each distinct food or drink item from the description.
+
+PORTION SIZE:
+- Use any quantities or weights the user gives (grams, pieces, cups, tbsp, slices).
+- Convert household measures to grams (1 cup cooked rice ~158 g, 1 large egg ~50 g,
+  1 tbsp oil ~14 g, 1 slice bread ~30 g).
+- If a quantity is missing, assume the most likely typical serving and lower the confidence.
+
+NUTRITION:
+- Estimate realistic per-100g values then scale to the portion.
+- Account for typical added oil/butter/sugar in prepared foods unless told otherwise.
+- Enforce internal consistency: calories must be ≈ protein*4 + carbs*4 + fat*9 (within ~10%).
+  Reconcile the numbers until they agree.
+
+For EACH item also return:
+- "confidence": one of "high", "medium", "low" — lower it when the user didn't specify a quantity.
+- "calorieMin" and "calorieMax": a realistic calorie range reflecting the uncertainty.
+
+Rules:
+- Be realistic, not optimistic.
+- If the text describes no food, return an empty items array and a short note.
+- Round grams and calories to integers; macros to at most one decimal.`;
+
 const responseSchema = {
   type: SchemaType.OBJECT,
   properties: {
@@ -91,26 +116,37 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: { imageBase64?: string; mimeType?: string; hint?: string };
+  let body: {
+    imageBase64?: string;
+    mimeType?: string;
+    hint?: string;
+    description?: string;
+  };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { imageBase64, mimeType, hint } = body;
-  if (!imageBase64 || !mimeType) {
+  const { imageBase64, mimeType, hint, description } = body;
+  const hasImage = Boolean(imageBase64 && mimeType);
+  const desc = (description ?? "").trim();
+
+  if (!hasImage && !desc) {
     return NextResponse.json(
-      { error: "imageBase64 and mimeType are required" },
+      { error: "Provide a photo or a text description of the food." },
       { status: 400 },
     );
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const parts = [
-    { text: PROMPT + (hint ? `\n\nUser hint about the food: ${hint}` : "") },
-    { inlineData: { data: imageBase64, mimeType } },
-  ];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const parts: any[] = hasImage
+    ? [
+        { text: PROMPT + (hint ? `\n\nUser hint about the food: ${hint}` : "") },
+        { inlineData: { data: imageBase64, mimeType } },
+      ]
+    : [{ text: `${TEXT_PROMPT}\n\nThe user ate:\n${desc}` }];
 
   let lastError = "";
   let quotaBlocked = false;

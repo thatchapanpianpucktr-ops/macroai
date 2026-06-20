@@ -40,6 +40,8 @@ export function FoodScanner({ date }: { date: string }) {
   );
   const [hint, setHint] = useState("");
   const [analyzed, setAnalyzed] = useState(false);
+  // Manual mode = opened via "Add manually" (text description / hand entry, no photo).
+  const [manual, setManual] = useState(false);
 
   function reset() {
     setItems([]);
@@ -50,6 +52,7 @@ export function FoodScanner({ date }: { date: string }) {
     setPending(null);
     setHint("");
     setAnalyzed(false);
+    setManual(false);
   }
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -69,18 +72,25 @@ export function FoodScanner({ date }: { date: string }) {
   }
 
   async function analyze() {
-    if (!pending) return;
+    // Image mode requires a photo; text mode requires a description.
+    if (!pending && !hint.trim()) {
+      setError("Type what you ate first, e.g. “50g banana, 2 eggs”.");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
+      const payload = pending
+        ? {
+            imageBase64: pending.base64,
+            mimeType: pending.mimeType,
+            hint: hint.trim() || undefined,
+          }
+        : { description: hint.trim() };
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          imageBase64: pending.base64,
-          mimeType: pending.mimeType,
-          hint: hint.trim() || undefined,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = (await res.json()) as AnalyzeResponse & { error?: string };
       if (!res.ok) throw new Error(data.error || "Analysis failed");
@@ -229,12 +239,12 @@ export function FoodScanner({ date }: { date: string }) {
       <button
         className="btn btn-ghost w-full py-3 mt-3"
         onClick={() => {
-          setOpen(true);
           reset();
-          addManualRow();
+          setManual(true);
+          setOpen(true);
         }}
       >
-        + Add manually
+        + Add manually / describe
       </button>
 
       {open && (
@@ -293,9 +303,50 @@ export function FoodScanner({ date }: { date: string }) {
               </div>
             )}
 
+            {/* Text-only mode: describe the food and let the AI estimate it. */}
+            {manual && (
+              <div className="mb-3">
+                <label className="text-xs text-[var(--muted)] mb-1 block">
+                  Describe what you ate
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    className="input flex-1"
+                    placeholder="e.g. 50g banana, 2 boiled eggs"
+                    value={hint}
+                    autoFocus
+                    onChange={(e) => setHint(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !loading) analyze();
+                    }}
+                  />
+                  <button
+                    className="btn btn-primary px-4 disabled:opacity-50"
+                    onClick={analyze}
+                    disabled={loading || !hint.trim()}
+                  >
+                    {analyzed ? "Redo" : "Estimate"}
+                  </button>
+                </div>
+                <p className="text-[11px] text-[var(--muted)] mt-1">
+                  No photo needed — tell the AI what and how much, and it
+                  estimates the macros. Or{" "}
+                  <button
+                    className="text-[var(--accent-2)] underline"
+                    onClick={addManualRow}
+                  >
+                    enter the numbers yourself
+                  </button>
+                  .
+                </p>
+              </div>
+            )}
+
             {loading && (
               <div className="py-10 text-center text-[var(--muted)]">
-                <div className="animate-pulse">Analyzing photo…</div>
+                <div className="animate-pulse">
+                  {manual ? "Estimating…" : "Analyzing photo…"}
+                </div>
                 <div className="text-xs mt-1">Estimating items &amp; portions</div>
               </div>
             )}
