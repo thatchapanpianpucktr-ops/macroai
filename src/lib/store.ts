@@ -76,6 +76,10 @@ export function useFoods(): {
   foods: FoodEntry[];
   add: (f: Omit<FoodEntry, "id" | "createdAt">) => void;
   remove: (id: string) => void;
+  update: (
+    id: string,
+    patch: Partial<Omit<FoodEntry, "id" | "createdAt">>,
+  ) => void;
 } {
   const json = useSyncExternalStore(
     subscribe,
@@ -105,7 +109,18 @@ export function useFoods(): {
     );
   }, []);
 
-  return { foods, add, remove };
+  const update = useCallback(
+    (id: string, patch: Partial<Omit<FoodEntry, "id" | "createdAt">>) => {
+      const list = read<FoodEntry[]>("foods", []);
+      write(
+        "foods",
+        list.map((f) => (f.id === id ? { ...f, ...patch } : f)),
+      );
+    },
+    [],
+  );
+
+  return { foods, add, remove, update };
 }
 
 // ---- Weights -----------------------------------------------------------

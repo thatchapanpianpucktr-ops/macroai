@@ -1,18 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { CalorieRing, MacroBar } from "@/components/Progress";
 import { FoodScanner } from "@/components/FoodScanner";
+import { FoodEditSheet } from "@/components/FoodEditSheet";
 import { useFoods, useSettings, useWeights } from "@/lib/store";
 import { currentWeight, estimateTDEE, resolveTargets } from "@/lib/tdee";
 import { todayYmd, ymdToLabel } from "@/lib/date";
 
 export default function TodayPage() {
   const [settings] = useSettings();
-  const { foods, remove } = useFoods();
+  const { foods, remove, update } = useFoods();
   const { weights } = useWeights();
   const date = todayYmd();
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const tdee = useMemo(
     () => estimateTDEE(settings, weights, foods),
@@ -114,7 +116,11 @@ export default function TodayPage() {
           </div>
         )}
         {today.map((f) => (
-          <div key={f.id} className="card p-3 flex items-center gap-3">
+          <button
+            key={f.id}
+            onClick={() => setEditingId(f.id)}
+            className="card p-3 flex items-center gap-3 w-full text-left active:opacity-80"
+          >
             {f.thumb ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -136,16 +142,18 @@ export default function TodayPage() {
             </div>
             <div className="text-right shrink-0">
               <div className="font-semibold tabular-nums">{f.calories}</div>
-              <button
-                onClick={() => remove(f.id)}
-                className="text-[11px] text-[var(--danger)]"
-              >
-                remove
-              </button>
+              <div className="text-[11px] text-[var(--muted)]">edit</div>
             </div>
-          </div>
+          </button>
         ))}
       </section>
+
+      <FoodEditSheet
+        entry={today.find((f) => f.id === editingId) ?? null}
+        onClose={() => setEditingId(null)}
+        onSave={(id, patch) => update(id, patch)}
+        onDelete={(id) => remove(id)}
+      />
     </div>
   );
 }
