@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { downscale } from "@/lib/image";
-import { useFoods } from "@/lib/store";
+import { useApiKey, useFoods } from "@/lib/store";
 import { NumberInput } from "@/components/NumberInput";
 import type { AnalyzedItem, AnalyzeResponse } from "@/lib/types";
 
@@ -26,6 +26,7 @@ interface DraftItem extends AnalyzedItem {
 
 export function FoodScanner({ date }: { date: string }) {
   const { add } = useFoods();
+  const [apiKey] = useApiKey();
   const cameraRef = useRef<HTMLInputElement>(null);
   const libraryRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
@@ -113,8 +114,9 @@ export function FoodScanner({ date }: { date: string }) {
                 mimeType: p.mimeType,
               })),
               hint: hint.trim() || undefined,
+              apiKey: apiKey || undefined,
             }
-          : { description: hint.trim() };
+          : { description: hint.trim(), apiKey: apiKey || undefined };
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

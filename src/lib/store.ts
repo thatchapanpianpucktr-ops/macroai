@@ -14,6 +14,8 @@ const KEYS = {
   foods: "macroai.foods.v1",
   weights: "macroai.weights.v1",
   water: "macroai.water.v1",
+  // Intentionally NOT included in export/import backups (a secret).
+  geminiKey: "macroai.geminiKey.v1",
 } as const;
 
 /** map of YYYY-MM-DD -> number of glasses */
@@ -186,6 +188,18 @@ export function useWater(date: string): {
   );
 
   return { glasses, setGlasses };
+}
+
+// ---- Gemini API key (per-device, never exported) -----------------------
+
+export function useApiKey(): [string, (k: string) => void] {
+  const key = useSyncExternalStore(
+    subscribe,
+    () => read<string>("geminiKey", ""),
+    () => "",
+  );
+  const setKey = useCallback((k: string) => write("geminiKey", k.trim()), []);
+  return [key, setKey];
 }
 
 export function exportAll() {

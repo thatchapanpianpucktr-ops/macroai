@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 // Newest first. Bump `build` whenever you want the popup to show again.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    build: 5,
+    version: "1.4",
+    date: "2026-06-20",
+    title: "Use your own AI key",
+    items: [
+      "Add your own free Google Gemini key in Settings to get your own scanning quota.",
+      "Your key is stored only on your device and is never included in backups.",
+      "No key? The app still works on a shared key — and Search & barcode never need one.",
+    ],
+  },
+  {
     build: 4,
     version: "1.3",
     date: "2026-06-20",

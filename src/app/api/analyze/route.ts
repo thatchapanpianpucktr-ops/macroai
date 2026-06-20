@@ -115,25 +115,31 @@ const responseSchema = {
 } as const;
 
 export async function POST(req: Request) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "Server is missing GEMINI_API_KEY. See README to set it up." },
-      { status: 500 },
-    );
-  }
-
   let body: {
     imageBase64?: string;
     mimeType?: string;
     images?: { base64?: string; mimeType?: string }[];
     hint?: string;
     description?: string;
+    apiKey?: string;
   };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  // Prefer the user's own key (bring-your-own-key); fall back to the server key.
+  const userKey = (body.apiKey ?? "").trim();
+  const apiKey = userKey || process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json(
+      {
+        error:
+          "No Gemini API key available. Add your own free key in Settings to use AI scanning.",
+      },
+      { status: 400 },
+    );
   }
 
   const { imageBase64, mimeType, hint, description } = body;
@@ -238,13 +244,28 @@ export async function POST(req: Request) {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       lastError = message;
+      // Invalid / rejected API key — no point trying other models.
+      if (
+        /API key not valid|API_KEY_INVALID|\b400\b.*key|permission|\b403\b/i.test(
+          message,
+        )
+      ) {
+        return NextResponse.json(
+          {
+            error: userKey
+              ? "Your Gemini API key was rejected. Double-check it in Settings (it should start with “AIza”)."
+              : "The server's Gemini key was rejected. Add your own free key in Settings.",
+          },
+          { status: 401 },
+        );
+      }
       const isQuota = /\b429\b|quota|rate.?limit/i.test(message);
       if (isQuota) {
         quotaBlocked = true;
         // try the next model
         continue;
       }
-      // Non-quota error (bad image, invalid key, etc.) — stop early.
+      // Non-quota error (bad image, etc.) — stop early.
       break;
     }
   }
@@ -252,8 +273,9 @@ export async function POST(req: Request) {
   if (quotaBlocked) {
     return NextResponse.json(
       {
-        error:
-          "Your Gemini free-tier quota is exhausted for all available models right now. Wait a minute (per-minute limit) or until tomorrow (daily limit), or enable billing on your Google AI Studio key for higher limits.",
+        error: userKey
+          ? "Your Gemini key's quota is used up for now. Wait a minute (per-minute limit) or until tomorrow (daily limit), or enable billing for higher limits."
+          : "The shared Gemini quota is exhausted right now. Add your own free key in Settings to get your own quota, or try again later.",
       },
       { status: 429 },
     );

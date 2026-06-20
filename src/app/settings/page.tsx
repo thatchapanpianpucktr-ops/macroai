@@ -1,7 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useSettings, useWeights, exportAll, importAll } from "@/lib/store";
+import {
+  useSettings,
+  useWeights,
+  useApiKey,
+  exportAll,
+  importAll,
+} from "@/lib/store";
 import { currentWeight, estimateTDEE, resolveTargets } from "@/lib/tdee";
 import { todayYmd, TIMEZONE_OPTIONS } from "@/lib/date";
 import { useFoods } from "@/lib/store";
@@ -42,6 +48,8 @@ export default function SettingsPage() {
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [backupMsg, setBackupMsg] = useState<string | null>(null);
+  const [apiKey, setApiKey] = useApiKey();
+  const [showKey, setShowKey] = useState(false);
 
   function finishOnboarding() {
     const w = parseFloat(startWeight);
@@ -335,6 +343,51 @@ export default function SettingsPage() {
             : "starting estimate"}
         </p>
       </section>
+
+      {settings.onboarded && (
+        <section className="card p-4 space-y-3">
+          <div>
+            <h2 className="font-semibold">AI scanning key</h2>
+            <p className="text-xs text-[var(--muted)]">
+              Photo &amp; describe scanning uses Google Gemini. Add your own free
+              key to get your own quota — otherwise the app uses a shared key
+              that can run out. Stored only on this device and never included in
+              backups.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <input
+              className="input flex-1 font-mono text-sm"
+              type={showKey ? "text" : "password"}
+              placeholder="AIza…"
+              value={apiKey}
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(e) => setApiKey(e.target.value)}
+            />
+            <button
+              className="btn btn-ghost px-3"
+              onClick={() => setShowKey((s) => !s)}
+            >
+              {showKey ? "Hide" : "Show"}
+            </button>
+          </div>
+          <div className="flex items-center justify-between">
+            <a
+              className="text-xs underline"
+              style={{ color: "var(--accent-2)" }}
+              href="https://aistudio.google.com/apikey"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Get a free key →
+            </a>
+            <span className="text-xs text-[var(--muted)]">
+              {apiKey ? "Using your key ✓" : "Using shared key"}
+            </span>
+          </div>
+        </section>
+      )}
 
       {settings.onboarded && (
         <section className="card p-4 space-y-3">
