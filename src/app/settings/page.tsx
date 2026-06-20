@@ -13,10 +13,9 @@ import { todayYmd, TIMEZONE_OPTIONS } from "@/lib/date";
 import { useFoods } from "@/lib/store";
 import { NumberInput } from "@/components/NumberInput";
 import { CHANGELOG } from "@/lib/changelog";
+import { openWhatsNew } from "@/lib/whatsnew";
 import { useMemo, useRef, useState } from "react";
 import type { ActivityLevel, Goal, Sex } from "@/lib/types";
-
-const WHATS_NEW_KEY = "macroai.lastSeenBuild.v1";
 
 const ACTIVITY_LABELS: Record<ActivityLevel, string> = {
   sedentary: "Sedentary (little/no exercise)",
@@ -90,10 +89,7 @@ export default function SettingsPage() {
   }
 
   function reopenWhatsNew() {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(WHATS_NEW_KEY, "0");
-      window.location.reload();
-    }
+    openWhatsNew();
   }
 
   return (

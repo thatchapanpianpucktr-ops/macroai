@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CHANGELOG, CURRENT_BUILD, type ChangelogEntry } from "@/lib/changelog";
 import { useSettings } from "@/lib/store";
+import { WHATSNEW_EVENT } from "@/lib/whatsnew";
 
 const KEY = "macroai.lastSeenBuild.v1";
 
@@ -10,6 +11,7 @@ export function WhatsNew() {
   const [settings] = useSettings();
   const [entries, setEntries] = useState<ChangelogEntry[]>([]);
 
+  // Auto-show new release notes once after an update.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const raw = window.localStorage.getItem(KEY);
@@ -25,6 +27,13 @@ export function WhatsNew() {
     const newer = CHANGELOG.filter((c) => c.build > lastSeen);
     if (newer.length) setEntries(newer);
   }, [settings.onboarded]);
+
+  // Manual re-open (from Settings) — always shows the full changelog, no reload.
+  useEffect(() => {
+    const open = () => setEntries(CHANGELOG);
+    window.addEventListener(WHATSNEW_EVENT, open);
+    return () => window.removeEventListener(WHATSNEW_EVENT, open);
+  }, []);
 
   if (entries.length === 0) return null;
 
