@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NumberInput } from "@/components/NumberInput";
 import { MEAL_LABELS, MEAL_ORDER } from "@/lib/meal";
+import { downscale } from "@/lib/image";
+import { useApiKey } from "@/lib/store";
+import { openApiKeyPrompt } from "@/lib/apikey-prompt";
 import type { FoodEntry, Meal } from "@/lib/types";
 
 type Draft = {
@@ -14,6 +17,23 @@ type Draft = {
   fat: number;
   meal: Meal;
 };
+
+type Base = {
+  grams: number;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+};
+
+const FRACTIONS: { f: number; label: string }[] = [
+  { f: 0.25, label: "¼" },
+  { f: 1 / 3, label: "⅓" },
+  { f: 0.5, label: "½" },
+  { f: 2 / 3, label: "⅔" },
+  { f: 0.75, label: "¾" },
+  { f: 1, label: "All" },
+];
 
 export function FoodEditSheet({
   entry,
@@ -27,6 +47,14 @@ export function FoodEditSheet({
   onDelete: (id: string) => void;
 }) {
   const [draft, setDraft] = useState<Draft | null>(null);
+  // The "full" serving we scale fractions from (the values as first opened).
+  const [base, setBase] = useState<Base | null>(null);
+  const [fraction, setFraction] = useState(1);
+  const [apiKey] = useApiKey();
+  const leftoverRef = useRef<HTMLInputElement>(null);
+  const [note, setNote] = useState("");
+  const [portionLoading, setPortionLoading] = useState(false);
+  const [portionMsg, setPortionMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (entry) {
@@ -39,12 +67,107 @@ export function FoodEditSheet({
         fat: entry.fat,
         meal: entry.meal ?? "snack",
       });
+      setBase({
+        grams: entry.grams ?? 0,
+        calories: entry.calories,
+        protein: entry.protein,
+        carbs: entry.carbs,
+        fat: entry.fat,
+      });
+      setFraction(1);
+      setNote("");
+      setPortionMsg(null);
+      setPortionLoading(false);
     } else {
       setDraft(null);
+      setBase(null);
     }
   }, [entry]);
 
-  if (!entry || !draft) return null;
+  if (!entry || !draft || !base) return null;
+
+  const r1 = (n: number) => Math.round(n * 10) / 10;
+
+  function applyFraction(f: number) {
+    if (!base) return;
+    setFraction(f);
+    setDraft((d) =>
+      d
+        ? {
+            ...d,
+            grams: Math.round(base.grams * f),
+            calories: Math.round(base.calories * f),
+            protein: r1(base.protein * f),
+            carbs: r1(base.carbs * f),
+            fat: r1(base.fat * f),
+          }
+        : d,
+    );
+  }
+
+  async function runPortion(
+    images: { base64: string; mimeType: string }[],
+  ) {
+    if (!entry || !base) return;
+    if (!apiKey) {
+      openApiKeyPrompt();
+      return;
+    }
+    if (images.length === 0 && !note.trim()) return;
+    setPortionLoading(true);
+    setPortionMsg(null);
+    try {
+      const res = await fetch("/api/portion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey,
+          original: {
+            name: entry.name,
+            grams: base.grams,
+            calories: base.calories,
+          },
+          images,
+          note: note.trim() || undefined,
+        }),
+      });
+      const data = (await res.json()) as {
+        fractionEaten?: number;
+        note?: string;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error || "Couldn't estimate portion");
+      const f = Math.min(1, Math.max(0, Number(data.fractionEaten) || 0));
+      applyFraction(f);
+      setPortionMsg(
+        `AI estimate: you ate ~${Math.round(f * 100)}%${
+          data.note ? ` — ${data.note}` : ""
+        }`,
+      );
+    } catch (err) {
+      setPortionMsg(
+        err instanceof Error ? err.message : "Couldn't estimate portion",
+      );
+    } finally {
+      setPortionLoading(false);
+    }
+  }
+
+  async function onLeftoverPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!apiKey) {
+      openApiKeyPrompt();
+      return;
+    }
+    try {
+      const img = await downscale(file, 1024);
+      await runPortion([{ base64: img.base64, mimeType: img.mimeType }]);
+    } catch {
+      setPortionMsg("Couldn't read that photo.");
+    }
+  }
 
   const macroKcal = Math.round(
     draft.protein * 4 + draft.carbs * 4 + draft.fat * 9,
@@ -128,6 +251,71 @@ export function FoodEditSheet({
             value={draft.fat}
             onChange={(v) => set("fat", v)}
           />
+        </div>
+
+        <div className="mt-4 rounded-xl bg-[var(--surface-2)] p-3">
+          <div className="text-xs font-semibold mb-2">
+            Didn’t finish it? How much did you eat?
+          </div>
+          <div className="grid grid-cols-6 gap-1.5">
+            {FRACTIONS.map(({ f, label }) => {
+              const active = Math.abs(fraction - f) < 0.02;
+              return (
+                <button
+                  key={label}
+                  onClick={() => applyFraction(f)}
+                  className="py-2 rounded-lg text-sm font-medium"
+                  style={{
+                    background: active ? "var(--accent)" : "var(--surface)",
+                    color: active ? "#04231a" : "var(--foreground)",
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-2 mt-2">
+            <input
+              className="input flex-1 py-1.5 text-sm"
+              placeholder="or say e.g. “left half”, “few bites”"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && note.trim() && !portionLoading) {
+                  runPortion([]);
+                }
+              }}
+            />
+            <button
+              className="btn btn-ghost px-3 text-sm disabled:opacity-50"
+              onClick={() => leftoverRef.current?.click()}
+              disabled={portionLoading}
+            >
+              {portionLoading ? "…" : "📷 Leftovers"}
+            </button>
+          </div>
+          <input
+            ref={leftoverRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={onLeftoverPhoto}
+          />
+          <p className="text-[11px] text-[var(--muted)] mt-1.5">
+            Tap a fraction for an instant adjustment, or add a leftovers photo
+            (with an optional note) and the AI estimates how much you ate.
+          </p>
+          {portionMsg && (
+            <p
+              className="text-[11px] mt-1"
+              style={{ color: "var(--accent-2)" }}
+            >
+              {portionMsg}
+            </p>
+          )}
         </div>
 
         {macroKcal > 0 && Math.abs(macroKcal - draft.calories) > 15 && (

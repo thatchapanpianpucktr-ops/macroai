@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 // Newest first. Bump `build` whenever you want the popup to show again.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    build: 7,
+    version: "1.6",
+    date: "2026-06-21",
+    title: "“I didn’t finish it”",
+    items: [
+      "Tap any logged item → choose how much you actually ate (¼, ⅓, ½, ⅔, ¾, all) to instantly scale calories & macros.",
+      "Or snap a photo of your leftovers (with an optional note) and the AI estimates how much you ate and subtracts the rest.",
+      "You can also just type “left half” or “a few bites” and let the AI adjust it.",
+    ],
+  },
+  {
     build: 6,
     version: "1.5",
     date: "2026-06-20",
