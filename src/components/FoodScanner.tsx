@@ -23,6 +23,8 @@ interface DraftItem extends AnalyzedItem {
   baseGrams: number;
   basePer: { calories: number; protein: number; carbs: number; fat: number };
   include: boolean;
+  /** when set, items sharing this name are logged together as ONE entry */
+  groupName?: string;
 }
 
 export function FoodScanner({ date }: { date: string }) {
@@ -183,6 +185,34 @@ export function FoodScanner({ date }: { date: string }) {
     );
   }
 
+  function setGroup(idx: number, name: string | undefined) {
+    setItems((prev) =>
+      prev.map((it, i) => (i === idx ? { ...it, groupName: name } : it)),
+    );
+  }
+
+  function handleGroupChange(idx: number, value: string) {
+    if (value === "__none__") return setGroup(idx, undefined);
+    if (value === "__new__") {
+      const name = window.prompt("Group name (e.g. Bento box)")?.trim();
+      if (name) setGroup(idx, name);
+      return;
+    }
+    setGroup(idx, value);
+  }
+
+  function groupAllAsOne() {
+    const name = window.prompt("Combine all items into one named item", "Meal")?.trim();
+    if (!name) return;
+    setItems((prev) =>
+      prev.map((it) => (it.include ? { ...it, groupName: name } : it)),
+    );
+  }
+
+  function ungroupAll() {
+    setItems((prev) => prev.map((it) => ({ ...it, groupName: undefined })));
+  }
+
   function addManualRow() {
     setItems((prev) => [
       ...prev,
@@ -201,9 +231,15 @@ export function FoodScanner({ date }: { date: string }) {
   }
 
   function commit() {
-    items
-      .filter((it) => it.include)
-      .forEach((it) => {
+    const included = items.filter((it) => it.include);
+    const groups = new Map<string, DraftItem[]>();
+
+    for (const it of included) {
+      if (it.groupName) {
+        const arr = groups.get(it.groupName) ?? [];
+        arr.push(it);
+        groups.set(it.groupName, arr);
+      } else {
         add({
           date,
           name: it.name,
@@ -215,14 +251,62 @@ export function FoodScanner({ date }: { date: string }) {
           source: "ai",
           thumb: cover ?? undefined,
         });
+      }
+    }
+
+    for (const [name, list] of groups) {
+      const sum = list.reduce(
+        (a, it) => ({
+          cal: a.cal + it.calories,
+          p: a.p + it.protein,
+          c: a.c + it.carbs,
+          f: a.f + it.fat,
+          g: a.g + (it.grams || 0),
+        }),
+        { cal: 0, p: 0, c: 0, f: 0, g: 0 },
+      );
+      add({
+        date,
+        name,
+        calories: Math.round(sum.cal),
+        protein: Math.round(sum.p * 10) / 10,
+        carbs: Math.round(sum.c * 10) / 10,
+        fat: Math.round(sum.f * 10) / 10,
+        grams: sum.g ? Math.round(sum.g) : undefined,
+        source: "ai",
+        thumb: cover ?? undefined,
       });
+    }
+
     setOpen(false);
     reset();
   }
 
-  const totalCals = items
-    .filter((it) => it.include)
-    .reduce((a, it) => a + it.calories, 0);
+  const included = items.filter((it) => it.include);
+  const totalCals = included.reduce((a, it) => a + it.calories, 0);
+  const groupNames = Array.from(
+    new Set(
+      items
+        .map((it) => it.groupName)
+        .filter((g): g is string => Boolean(g)),
+    ),
+  );
+  // What will actually be logged (after merging groups), for a preview.
+  const logPlan: { name: string; kcal: number; grouped: boolean }[] = (() => {
+    const groups = new Map<string, number>();
+    const out: { name: string; kcal: number; grouped: boolean }[] = [];
+    for (const it of included) {
+      if (it.groupName) {
+        groups.set(it.groupName, (groups.get(it.groupName) ?? 0) + it.calories);
+      } else {
+        out.push({ name: it.name, kcal: it.calories, grouped: false });
+      }
+    }
+    for (const [name, kcal] of groups) {
+      out.push({ name, kcal: Math.round(kcal), grouped: true });
+    }
+    return out;
+  })();
 
   return (
     <>
@@ -446,13 +530,43 @@ export function FoodScanner({ date }: { date: string }) {
               <div className="text-xs text-[var(--muted)] mb-2">{note}</div>
             )}
 
+            {!loading && items.length > 1 && (
+              <div className="flex items-center justify-between mb-2 text-xs">
+                <span className="text-[var(--muted)]">
+                  Group sub-items into one entry?
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    className="underline"
+                    style={{ color: "var(--accent-2)" }}
+                    onClick={groupAllAsOne}
+                  >
+                    Combine all
+                  </button>
+                  {groupNames.length > 0 && (
+                    <button
+                      className="underline text-[var(--muted)]"
+                      onClick={ungroupAll}
+                    >
+                      Ungroup
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {!loading && items.length > 0 && (
               <div className="space-y-3">
                 {items.map((it, i) => (
                   <div
                     key={i}
                     className="rounded-xl bg-[var(--surface-2)] p-3"
-                    style={{ opacity: it.include ? 1 : 0.45 }}
+                    style={{
+                      opacity: it.include ? 1 : 0.45,
+                      borderLeft: it.groupName
+                        ? "3px solid var(--accent)"
+                        : "3px solid transparent",
+                    }}
                   >
                     <div className="flex items-center gap-2 mb-2">
                       <input
@@ -479,6 +593,26 @@ export function FoodScanner({ date }: { date: string }) {
                         {it.include ? "✓" : "+"}
                       </button>
                     </div>
+                    {items.length > 1 && it.include && (
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-[11px] text-[var(--muted)] shrink-0">
+                          Part of:
+                        </span>
+                        <select
+                          className="input py-1 text-xs flex-1"
+                          value={it.groupName ?? "__none__"}
+                          onChange={(e) => handleGroupChange(i, e.target.value)}
+                        >
+                          <option value="__none__">Its own item</option>
+                          {groupNames.map((g) => (
+                            <option key={g} value={g}>
+                              {g}
+                            </option>
+                          ))}
+                          <option value="__new__">+ New group…</option>
+                        </select>
+                      </div>
+                    )}
                     {(it.confidence ||
                       (it.calorieMin != null && it.calorieMax != null)) && (
                       <div className="flex items-center gap-2 mb-2 text-[11px]">
@@ -554,6 +688,25 @@ export function FoodScanner({ date }: { date: string }) {
                 >
                   + add another item
                 </button>
+              </div>
+            )}
+
+            {!loading && groupNames.length > 0 && (
+              <div className="mt-3 rounded-xl bg-[var(--surface-2)] p-3 text-xs">
+                <div className="text-[var(--muted)] mb-1">Will be logged as:</div>
+                <ul className="space-y-1">
+                  {logPlan.map((p, i) => (
+                    <li key={i} className="flex justify-between">
+                      <span>
+                        {p.grouped ? "🍱 " : ""}
+                        {p.name}
+                      </span>
+                      <span className="tabular-nums text-[var(--muted)]">
+                        {p.kcal} kcal
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 

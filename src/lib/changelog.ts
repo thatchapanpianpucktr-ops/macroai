@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 // Newest first. Bump `build` whenever you want the popup to show again.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    build: 8,
+    version: "1.7",
+    date: "2026-06-21",
+    title: "Group items your way",
+    items: [
+      "After a scan, combine the AI’s sub-items into one entry — e.g. group all the bento parts as “Bento box” while your coffee stays separate.",
+      "Use “Combine all” for a single item, or set each item’s group with the “Part of” picker.",
+      "A preview shows exactly what will be logged before you save.",
+    ],
+  },
+  {
     build: 7,
     version: "1.6",
     date: "2026-06-21",
