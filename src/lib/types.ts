@@ -39,6 +39,14 @@ export interface WeightEntry {
 
 export type Meal = "breakfast" | "lunch" | "dinner" | "snack";
 
+/** One turn in a conversation with the AI about a meal/item. */
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  /** ISO timestamp */
+  at: string;
+}
+
 export interface FoodEntry {
   id: string;
   /** YYYY-MM-DD */
@@ -56,6 +64,8 @@ export interface FoodEntry {
   source: "ai" | "manual" | "db" | "barcode";
   /** small base64 thumbnail for the log list */
   thumb?: string;
+  /** saved AI discussion about this item, if any */
+  chat?: ChatMessage[];
 }
 
 export interface MacroTargets {
@@ -91,6 +101,8 @@ export interface AnalyzedItem {
 
 export interface AnalyzeResponse {
   items: AnalyzedItem[];
+  /** a short natural name for the whole meal, suggested by the model */
+  mealName?: string;
   note?: string;
 }
 

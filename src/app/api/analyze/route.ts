@@ -21,6 +21,16 @@ Identify each distinct food or drink item in the photo(s). For composite dishes
 (stir-fries, salads, sandwiches, curries), break them into their main components
 when that improves accuracy.
 
+THINK FIRST: Before giving numbers, work through the problem in the "reasoning"
+field, step by step:
+1. List what foods/drinks you see and how you identified each (ingredients, cooking method).
+2. For each, estimate the portion by comparing it to visible reference objects
+   (plate, utensils, hand, packaging) — state the reference you used.
+3. Derive realistic per-100g nutrition, then scale to the portion.
+4. Sanity-check totals against what a typical serving of this dish weighs.
+Reasoning should be concise but show the actual estimation logic — this is what
+makes the numbers accurate. Then fill the structured fields to MATCH your reasoning.
+
 MULTIPLE PHOTOS: You may receive several photos of the SAME meal or product
 (e.g. the front of a package and its nutrition label, or the same plate from
 different angles). Treat all photos together as ONE submission describing the
@@ -31,7 +41,8 @@ once just because it appears in multiple photos.
 PORTION SIZE — reason from visual reference cues, don't just guess:
 - A dinner plate is ~26 cm across; a fork ~19 cm; a teaspoon ~5 ml, a tablespoon ~15 ml.
 - A standard soda can is 330 ml; a mug ~250 ml; a slice of bread ~30 g.
-- Compare the food's footprint and height to these references to estimate grams/volume.
+- Compare the food's footprint AND height/depth to these references — a tall pile
+  holds far more than a thin layer of the same width.
 
 NUTRITION:
 - First estimate realistic per-100g values for the food, then scale to your portion.
@@ -45,6 +56,10 @@ For EACH item also return:
   and how identifiable the food is.
 - "calorieMin" and "calorieMax": a realistic calorie range reflecting portion uncertainty.
 
+Also return "mealName": a short, natural name for the WHOLE meal/dish as a person would
+say it (e.g. "Chicken rice with fried egg", "Latte & croissant", "Pad thai with prawns").
+Name it after the actual foods present — never a generic placeholder like "Meal" or "Bento box".
+
 Rules:
 - Be realistic, not optimistic. When unsure about portion, choose the most likely typical serving.
 - If the image clearly contains no food, return an empty items array and a short note.
@@ -53,6 +68,10 @@ Rules:
 const TEXT_PROMPT = `You are a meticulous nutrition estimation assistant for a calorie-tracking app.
 The user describes in words what they ate (e.g. "50g banana, 2 boiled eggs, a cup of rice").
 Identify each distinct food or drink item from the description.
+
+THINK FIRST: In the "reasoning" field, briefly work through each item — the likely
+preparation, how you converted the stated amount to grams, the per-100g nutrition,
+and the scaled result. Then fill the structured fields to MATCH your reasoning.
 
 PORTION SIZE:
 - Use any quantities or weights the user gives (grams, pieces, cups, tbsp, slices).
@@ -70,6 +89,9 @@ For EACH item also return:
 - "confidence": one of "high", "medium", "low" — lower it when the user didn't specify a quantity.
 - "calorieMin" and "calorieMax": a realistic calorie range reflecting the uncertainty.
 
+Also return "mealName": a short, natural name for the whole thing the user described
+(e.g. "Banana & boiled eggs"). Name it after the actual foods, not a generic placeholder.
+
 Rules:
 - Be realistic, not optimistic.
 - If the text describes no food, return an empty items array and a short note.
@@ -78,6 +100,9 @@ Rules:
 const responseSchema = {
   type: SchemaType.OBJECT,
   properties: {
+    // Listed first so the model reasons before committing to numbers
+    // (structured output is generated in property order).
+    reasoning: { type: SchemaType.STRING },
     items: {
       type: SchemaType.ARRAY,
       items: {
@@ -110,9 +135,10 @@ const responseSchema = {
         ],
       },
     },
+    mealName: { type: SchemaType.STRING },
     note: { type: SchemaType.STRING },
   },
-  required: ["items"],
+  required: ["reasoning", "items"],
 } as const;
 
 export async function POST(req: Request) {

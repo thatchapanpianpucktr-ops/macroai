@@ -5,7 +5,8 @@ import { downscale } from "@/lib/image";
 import { useApiKey, useFoods } from "@/lib/store";
 import { openApiKeyPrompt } from "@/lib/apikey-prompt";
 import { NumberInput } from "@/components/NumberInput";
-import type { AnalyzedItem, AnalyzeResponse } from "@/lib/types";
+import { ChatPanel, type ChatItem } from "@/components/ChatPanel";
+import type { AnalyzedItem, AnalyzeResponse, ChatMessage } from "@/lib/types";
 
 const CONF_BG: Record<string, string> = {
   high: "rgba(52,211,153,0.18)",
@@ -46,8 +47,25 @@ export function FoodScanner({ date }: { date: string }) {
   const [analyzed, setAnalyzed] = useState(false);
   // Manual mode = opened via "Add manually" (text description / hand entry, no photo).
   const [manual, setManual] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  // By default a scan logs as ONE combined entry (most people forget to group).
+  const [combineAll, setCombineAll] = useState(true);
+  const [mealName, setMealName] = useState("");
 
   const cover = pending[0]?.thumb ?? null;
+
+  /** Best-effort name for a combined entry when the model didn't give one. */
+  function deriveMealName(list: { name: string; calories: number }[]) {
+    const names = [...list]
+      .sort((a, b) => b.calories - a.calories)
+      .map((it) => it.name.trim())
+      .filter(Boolean);
+    if (names.length === 0) return "Meal";
+    if (names.length === 1) return names[0];
+    if (names.length === 2) return `${names[0]} & ${names[1]}`;
+    return `${names[0]}, ${names[1]} & more`;
+  }
 
   function reset() {
     setItems([]);
@@ -58,6 +76,32 @@ export function FoodScanner({ date }: { date: string }) {
     setHint("");
     setAnalyzed(false);
     setManual(false);
+    setChatOpen(false);
+    setChatMessages([]);
+    setCombineAll(true);
+    setMealName("");
+  }
+
+  /** Replace the draft list with the AI's revised items (from chat). */
+  function applyChatItems(next: ChatItem[]) {
+    setItems(
+      next.map((it) => ({
+        name: it.name,
+        grams: it.grams,
+        calories: it.calories,
+        protein: it.protein,
+        carbs: it.carbs,
+        fat: it.fat,
+        baseGrams: it.grams || 1,
+        basePer: {
+          calories: it.calories,
+          protein: it.protein,
+          carbs: it.carbs,
+          fat: it.fat,
+        },
+        include: true,
+      })),
+    );
   }
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -73,7 +117,7 @@ export function FoodScanner({ date }: { date: string }) {
     setAnalyzed(false);
     for (const file of files) {
       try {
-        const big = await downscale(file, 1024);
+        const big = await downscale(file, 1536, 0.85);
         const small = await downscale(file, 120, 0.7);
         setPending((prev) =>
           prev.length >= 6
@@ -133,18 +177,20 @@ export function FoodScanner({ date }: { date: string }) {
       const data = (await res.json()) as AnalyzeResponse & { error?: string };
       if (!res.ok) throw new Error(data.error || "Analysis failed");
       setNote(data.note ?? null);
-      setItems(
-        (data.items ?? []).map((it) => ({
-          ...it,
-          baseGrams: it.grams || 1,
-          basePer: {
-            calories: it.calories,
-            protein: it.protein,
-            carbs: it.carbs,
-            fat: it.fat,
-          },
-          include: true,
-        })),
+      const newItems = (data.items ?? []).map((it) => ({
+        ...it,
+        baseGrams: it.grams || 1,
+        basePer: {
+          calories: it.calories,
+          protein: it.protein,
+          carbs: it.carbs,
+          fat: it.fat,
+        },
+        include: true,
+      }));
+      setItems(newItems);
+      setMealName(
+        (data.mealName ?? "").trim() || deriveMealName(newItems),
       );
       setAnalyzed(true);
     } catch (err) {
@@ -232,6 +278,36 @@ export function FoodScanner({ date }: { date: string }) {
 
   function commit() {
     const included = items.filter((it) => it.include);
+
+    // Default path: combine everything from this scan into ONE entry.
+    if (combineAll && included.length > 0) {
+      const sum = included.reduce(
+        (a, it) => ({
+          cal: a.cal + it.calories,
+          p: a.p + it.protein,
+          c: a.c + it.carbs,
+          f: a.f + it.fat,
+          g: a.g + (it.grams || 0),
+        }),
+        { cal: 0, p: 0, c: 0, f: 0, g: 0 },
+      );
+      add({
+        date,
+        name: mealName.trim() || deriveMealName(included),
+        calories: Math.round(sum.cal),
+        protein: Math.round(sum.p * 10) / 10,
+        carbs: Math.round(sum.c * 10) / 10,
+        fat: Math.round(sum.f * 10) / 10,
+        grams: sum.g ? Math.round(sum.g) : undefined,
+        source: "ai",
+        thumb: cover ?? undefined,
+        chat: chatMessages.length ? chatMessages : undefined,
+      });
+      setOpen(false);
+      reset();
+      return;
+    }
+
     const groups = new Map<string, DraftItem[]>();
 
     for (const it of included) {
@@ -250,6 +326,7 @@ export function FoodScanner({ date }: { date: string }) {
           grams: it.grams,
           source: "ai",
           thumb: cover ?? undefined,
+          chat: chatMessages.length ? chatMessages : undefined,
         });
       }
     }
@@ -275,6 +352,7 @@ export function FoodScanner({ date }: { date: string }) {
         grams: sum.g ? Math.round(sum.g) : undefined,
         source: "ai",
         thumb: cover ?? undefined,
+        chat: chatMessages.length ? chatMessages : undefined,
       });
     }
 
@@ -530,7 +608,43 @@ export function FoodScanner({ date }: { date: string }) {
               <div className="text-xs text-[var(--muted)] mb-2">{note}</div>
             )}
 
-            {!loading && items.length > 1 && (
+            {!loading && items.length > 0 && (
+              <div className="mb-3 rounded-xl bg-[var(--surface-2)] p-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 accent-[var(--accent)]"
+                    checked={combineAll}
+                    onChange={(e) => setCombineAll(e.target.checked)}
+                  />
+                  <span className="text-sm font-medium">
+                    Log as one combined entry
+                  </span>
+                </label>
+                {combineAll ? (
+                  <>
+                    <input
+                      className="input w-full mt-2"
+                      value={mealName}
+                      onChange={(e) => setMealName(e.target.value)}
+                      placeholder="Meal name"
+                      aria-label="Meal name"
+                    />
+                    <p className="text-[11px] text-[var(--muted)] mt-1">
+                      Everything below is combined into this single log. Untick
+                      to log each item separately.
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-[11px] text-[var(--muted)] mt-1">
+                    Each item is logged separately — or group some together
+                    below.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {!loading && items.length > 1 && !combineAll && (
               <div className="flex items-center justify-between mb-2 text-xs">
                 <span className="text-[var(--muted)]">
                   Group sub-items into one entry?
@@ -593,7 +707,7 @@ export function FoodScanner({ date }: { date: string }) {
                         {it.include ? "✓" : "+"}
                       </button>
                     </div>
-                    {items.length > 1 && it.include && (
+                    {items.length > 1 && it.include && !combineAll && (
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-[11px] text-[var(--muted)] shrink-0">
                           Part of:
@@ -691,7 +805,24 @@ export function FoodScanner({ date }: { date: string }) {
               </div>
             )}
 
-            {!loading && groupNames.length > 0 && (
+            {!loading && items.length > 0 && (
+              <button
+                onClick={() => {
+                  if (!apiKey) return openApiKeyPrompt();
+                  setChatOpen(true);
+                }}
+                className="w-full mt-3 rounded-xl py-2.5 text-sm font-medium flex items-center justify-center gap-2"
+                style={{
+                  background: "rgba(56,189,248,0.12)",
+                  color: "var(--accent-2)",
+                }}
+              >
+                💬 Discuss with AI
+                {chatMessages.length > 0 ? ` (${chatMessages.length})` : ""}
+              </button>
+            )}
+
+            {!loading && !combineAll && groupNames.length > 0 && (
               <div className="mt-3 rounded-xl bg-[var(--surface-2)] p-3 text-xs">
                 <div className="text-[var(--muted)] mb-1">Will be logged as:</div>
                 <ul className="space-y-1">
@@ -722,6 +853,25 @@ export function FoodScanner({ date }: { date: string }) {
           </div>
         </div>
       )}
+
+      <ChatPanel
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        title="Discuss this meal"
+        kind="scan"
+        items={included.map((it) => ({
+          name: it.name,
+          grams: it.grams,
+          calories: it.calories,
+          protein: it.protein,
+          carbs: it.carbs,
+          fat: it.fat,
+        }))}
+        images={pending.map((p) => ({ base64: p.base64, mimeType: p.mimeType }))}
+        messages={chatMessages}
+        onMessagesChange={setChatMessages}
+        onApplyItems={applyChatItems}
+      />
     </>
   );
 }

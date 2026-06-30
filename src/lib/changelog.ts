@@ -10,6 +10,19 @@ export interface ChangelogEntry {
 // Newest first. Bump `build` whenever you want the popup to show again.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    build: 10,
+    version: "1.9",
+    date: "2026-06-30",
+    title: "Chat with the AI + sharper estimates",
+    items: [
+      "New: tap “Discuss with AI” on any scan or logged item to chat — disagree, ask “why so many calories?”, or say “make the rice smaller” and it explains and adjusts.",
+      "On a logged item you can also attach a leftovers photo in chat and talk through how much you actually ate.",
+      "Changes preview live; nothing is saved until you hit Save — and your conversation is kept with the item.",
+      "Scans now log as one combined entry by default, auto-named after the food (untick to split) — no more forgetting to group.",
+      "More accurate scans: the AI now reasons step-by-step before giving numbers, and photos are sent in higher resolution.",
+    ],
+  },
+  {
     build: 9,
     version: "1.8",
     date: "2026-06-30",

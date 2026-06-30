@@ -6,7 +6,8 @@ import { MEAL_LABELS, MEAL_ORDER } from "@/lib/meal";
 import { downscale } from "@/lib/image";
 import { useApiKey } from "@/lib/store";
 import { openApiKeyPrompt } from "@/lib/apikey-prompt";
-import type { FoodEntry, Meal } from "@/lib/types";
+import { ChatPanel, type ChatItem } from "@/components/ChatPanel";
+import type { ChatMessage, FoodEntry, Meal } from "@/lib/types";
 
 type Draft = {
   name: string;
@@ -55,6 +56,8 @@ export function FoodEditSheet({
   const [note, setNote] = useState("");
   const [portionLoading, setPortionLoading] = useState(false);
   const [portionMsg, setPortionMsg] = useState<string | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
   useEffect(() => {
     if (entry) {
@@ -78,6 +81,8 @@ export function FoodEditSheet({
       setNote("");
       setPortionMsg(null);
       setPortionLoading(false);
+      setChatOpen(false);
+      setChatMessages(entry.chat ?? []);
     } else {
       setDraft(null);
       setBase(null);
@@ -162,7 +167,7 @@ export function FoodEditSheet({
       return;
     }
     try {
-      const img = await downscale(file, 1024);
+      const img = await downscale(file, 1536, 0.85);
       await runPortion([{ base64: img.base64, mimeType: img.mimeType }]);
     } catch {
       setPortionMsg("Couldn't read that photo.");
@@ -177,6 +182,25 @@ export function FoodEditSheet({
     setDraft((d) => (d ? { ...d, [key]: value } : d));
   }
 
+  /** Live-apply the AI's revised numbers (from chat) to the draft. */
+  function applyChatItems(next: ChatItem[]) {
+    const it = next[0];
+    if (!it) return;
+    setDraft((d) =>
+      d
+        ? {
+            ...d,
+            name: it.name || d.name,
+            grams: Math.round(it.grams),
+            calories: Math.round(it.calories),
+            protein: r1(it.protein),
+            carbs: r1(it.carbs),
+            fat: r1(it.fat),
+          }
+        : d,
+    );
+  }
+
   function save() {
     if (!entry || !draft) return;
     onSave(entry.id, {
@@ -187,6 +211,7 @@ export function FoodEditSheet({
       carbs: Math.max(0, draft.carbs),
       fat: Math.max(0, draft.fat),
       meal: draft.meal,
+      chat: chatMessages.length ? chatMessages : undefined,
     });
     onClose();
   }
@@ -318,6 +343,21 @@ export function FoodEditSheet({
           )}
         </div>
 
+        <button
+          onClick={() => {
+            if (!apiKey) return openApiKeyPrompt();
+            setChatOpen(true);
+          }}
+          className="w-full mt-3 rounded-xl py-2.5 text-sm font-medium flex items-center justify-center gap-2"
+          style={{
+            background: "rgba(56,189,248,0.12)",
+            color: "var(--accent-2)",
+          }}
+        >
+          💬 Chat with AI to adjust
+          {chatMessages.length > 0 ? ` (${chatMessages.length})` : ""}
+        </button>
+
         {macroKcal > 0 && Math.abs(macroKcal - draft.calories) > 15 && (
           <button
             className="text-xs text-[var(--accent-2)] mt-2"
@@ -343,6 +383,27 @@ export function FoodEditSheet({
           </button>
         </div>
       </div>
+
+      <ChatPanel
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        title={`Discuss: ${draft.name}`}
+        kind="item"
+        allowPhoto
+        items={[
+          {
+            name: draft.name,
+            grams: draft.grams,
+            calories: draft.calories,
+            protein: draft.protein,
+            carbs: draft.carbs,
+            fat: draft.fat,
+          },
+        ]}
+        messages={chatMessages}
+        onMessagesChange={setChatMessages}
+        onApplyItems={applyChatItems}
+      />
     </div>
   );
 }
