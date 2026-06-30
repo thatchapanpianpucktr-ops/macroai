@@ -79,7 +79,17 @@ Everything is stored locally in your browser. Food photos are sent to Google
 Gemini **only** for analysis (server-side, not stored by this app). Clearing your
 browser storage erases all data.
 
-## Deploy (optional)
+## Deploy
 
-Deploy to Vercel (free): import the repo, set `GEMINI_API_KEY` as an environment
-variable, deploy. The PWA service worker is only active in production builds.
+Hosted on **Vercel**, connected to this GitHub repo for **continuous deployment**:
+every push to `main` automatically builds and ships to production.
+
+```bash
+git add -A
+git commit -m "what changed"
+git push        # Vercel auto-deploys within ~1 minute
+```
+
+No server-side API key is required — each user supplies their **own Gemini API key**
+in-app (Settings → AI key), stored on their device only. The PWA service worker is
+only active in production builds.
