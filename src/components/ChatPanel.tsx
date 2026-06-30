@@ -23,6 +23,7 @@ export function ChatPanel({
   items,
   images = [],
   allowPhoto = false,
+  reasoning,
   messages,
   onMessagesChange,
   onApplyItems,
@@ -37,6 +38,8 @@ export function ChatPanel({
   images?: { base64: string; mimeType: string }[];
   /** allow attaching photos in-chat (e.g. leftovers) */
   allowPhoto?: boolean;
+  /** the model's original reasoning, so it can explain its logic on request */
+  reasoning?: string;
   messages: ChatMessage[];
   onMessagesChange: (msgs: ChatMessage[]) => void;
   /** live-apply the AI's revised numbers to the parent draft */
@@ -62,6 +65,21 @@ export function ChatPanel({
 
   if (!open) return null;
 
+  const suggestions: { label: string; prompt: string }[] = [
+    {
+      label: "🧠 Explain your logic",
+      prompt:
+        "Explain your logic for logging this — how you identified each item, how you judged the portion sizes, and how you got the calories and macros.",
+    },
+    {
+      label: "🤔 Why these calories?",
+      prompt: "Why these calories? Walk me through the numbers.",
+    },
+    kind === "scan"
+      ? { label: "❓ Anything missing?", prompt: "Is anything missing from this meal?" }
+      : { label: "🍽️ I ate less", prompt: "I didn't finish all of it — I ate less than this." },
+  ];
+
   async function onPhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
@@ -83,8 +101,9 @@ export function ChatPanel({
     }
   }
 
-  async function send() {
-    const text = input.trim();
+  async function send(textArg?: string) {
+    const fromInput = textArg === undefined;
+    const text = (fromInput ? input : textArg).trim();
     if (!text || loading) return;
     if (!apiKey) {
       openApiKeyPrompt();
@@ -94,7 +113,7 @@ export function ChatPanel({
     const userMsg: ChatMessage = { role: "user", content: text, at: now };
     const next = [...messages, userMsg];
     onMessagesChange(next);
-    setInput("");
+    if (fromInput) setInput("");
     setError(null);
     setLoading(true);
 
@@ -112,6 +131,7 @@ export function ChatPanel({
           kind,
           items,
           images: sentImages,
+          reasoning,
           messages: next.map((m) => ({ role: m.role, content: m.content })),
         }),
       });
@@ -225,6 +245,20 @@ export function ChatPanel({
           </div>
         )}
 
+        {!loading && (
+          <div className="flex gap-2 overflow-x-auto no-scrollbar px-3 pt-2 pb-1">
+            {suggestions.map((s) => (
+              <button
+                key={s.label}
+                onClick={() => send(s.prompt)}
+                className="shrink-0 rounded-full border border-[var(--surface-2)] bg-[var(--surface-2)] px-3 py-1.5 text-xs text-[var(--foreground)] active:opacity-70"
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="flex items-center gap-2 px-3 py-3 border-t border-[var(--surface-2)]">
           {allowPhoto && (
             <>
@@ -258,7 +292,7 @@ export function ChatPanel({
           />
           <button
             className="btn btn-primary px-4 py-2 shrink-0 disabled:opacity-50"
-            onClick={send}
+            onClick={() => send()}
             disabled={loading || !input.trim()}
           >
             Send

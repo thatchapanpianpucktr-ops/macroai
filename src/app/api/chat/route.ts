@@ -30,7 +30,12 @@ How to respond:
 - Keep calories internally consistent: calories ≈ protein*4 + carbs*4 + fat*9.
 - Be honest: if you think their adjustment is unrealistic, say so and propose a sensible
   number rather than blindly obeying. But the user has the final say.
-- Keep replies short (1-3 sentences). Round grams & calories to integers, macros to one decimal.`;
+- If asked to EXPLAIN your logic / why the numbers are what they are, walk through how
+  each item was identified, how the portion was judged (reference objects, typical serving),
+  and how the calories/macros were derived. Use the "original reasoning" below if provided.
+- Keep replies short (1-3 sentences) UNLESS the user asks you to explain your logic, in
+  which case a clear short paragraph or a few bullet points is fine.
+- Round grams & calories to integers, macros to one decimal.`;
 
 const itemSchema = {
   type: SchemaType.OBJECT,
@@ -93,6 +98,7 @@ export async function POST(req: Request) {
     items?: Partial<Item>[];
     images?: { base64?: string; mimeType?: string }[];
     messages?: { role?: string; content?: string }[];
+    reasoning?: string;
   };
   try {
     body = await req.json();
@@ -141,12 +147,20 @@ export async function POST(req: Request) {
     .map((m) => `${m.role === "assistant" ? "Assistant" : "User"}: ${m.content}`)
     .join("\n");
 
+  const reasoning = String(body.reasoning ?? "").trim().slice(0, 4000);
+  const reasoningBlock = reasoning
+    ? `\n\nYOUR ORIGINAL REASONING when first estimating this ${
+        body.kind === "item" ? "item" : "meal"
+      } (use this if the user asks you to explain your logic):
+${reasoning}`
+    : "";
+
   const contextText = `${SYSTEM}
 
 CURRENT ESTIMATE (the items currently logged for this ${
     body.kind === "item" ? "item" : "meal"
   }):
-${JSON.stringify(items, null, 2)}
+${JSON.stringify(items, null, 2)}${reasoningBlock}
 
 CONVERSATION SO FAR (reply to the last User message):
 ${transcript}`;
