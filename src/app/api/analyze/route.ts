@@ -9,6 +9,7 @@ export const maxDuration = 30;
 // An optional GEMINI_MODEL env var is tried first.
 const MODELS = [
   process.env.GEMINI_MODEL,
+  "gemini-3.5-flash",
   "gemini-2.5-flash",
   "gemini-2.0-flash",
   "gemini-2.5-flash-lite",

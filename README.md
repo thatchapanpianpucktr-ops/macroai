@@ -19,7 +19,7 @@ Built as a **local-only PWA** (Next.js). All your data lives in your browser
 ## Stack
 
 - Next.js (App Router) + TypeScript + Tailwind CSS
-- Google Gemini (`gemini-2.0-flash`) via `@google/generative-ai` (server-side, free tier)
+- Google Gemini (`gemini-3.5-flash`, with automatic fallback to older Flash models on quota limits) via `@google/generative-ai`
 - `localStorage` for persistence
 
 ## Setup
@@ -36,7 +36,7 @@ Built as a **local-only PWA** (Next.js). All your data lives in your browser
 
    ```bash
    GEMINI_API_KEY=your_key_here
-   # optional: GEMINI_MODEL=gemini-2.0-flash
+   # optional: GEMINI_MODEL=gemini-3.5-flash
    ```
 
 4. Run the dev server:

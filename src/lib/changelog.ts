@@ -10,6 +10,16 @@ export interface ChangelogEntry {
 // Newest first. Bump `build` whenever you want the popup to show again.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    build: 9,
+    version: "1.8",
+    date: "2026-06-30",
+    title: "Smarter AI scanning",
+    items: [
+      "Upgraded to Google’s latest Gemini 3.5 Flash for more accurate food recognition and macro estimates.",
+      "If your key ever hits its limit, the app automatically falls back to earlier models so scanning keeps working.",
+    ],
+  },
+  {
     build: 8,
     version: "1.7",
     date: "2026-06-21",
