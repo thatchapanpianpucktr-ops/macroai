@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { downscale } from "@/lib/image";
 import { useApiKey, useFoods } from "@/lib/store";
 import { openApiKeyPrompt } from "@/lib/apikey-prompt";
@@ -31,8 +31,6 @@ interface DraftItem extends AnalyzedItem {
 export function FoodScanner({ date }: { date: string }) {
   const { add } = useFoods();
   const [apiKey] = useApiKey();
-  const cameraRef = useRef<HTMLInputElement>(null);
-  const libraryRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -107,11 +105,8 @@ export function FoodScanner({ date }: { date: string }) {
     );
   }
 
-  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    e.target.value = "";
+  async function processFiles(files: File[]) {
     if (files.length === 0) return;
-    // Starting fresh from the home screen vs. adding more inside the modal.
     if (!open) {
       reset();
       setOpen(true);
@@ -140,6 +135,30 @@ export function FoodScanner({ date }: { date: string }) {
         );
       }
     }
+  }
+
+  /**
+   * Dynamically create a file input each click — the only reliable way to open
+   * the iOS camera in a PWA. A static hidden <input capture="environment"> that
+   * is .click()-ed programmatically is silently ignored by iOS when installed to
+   * the home screen.
+   */
+  function triggerCamera() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.capture = "environment";
+    input.onchange = () => processFiles(Array.from(input.files ?? []));
+    input.click();
+  }
+
+  function triggerLibrary() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.multiple = true;
+    input.onchange = () => processFiles(Array.from(input.files ?? []));
+    input.click();
   }
 
   function removePhoto(idx: number) {
@@ -392,29 +411,10 @@ export function FoodScanner({ date }: { date: string }) {
 
   return (
     <>
-      {/* Camera (rear) on phones; ignored on desktop. One shot at a time. */}
-      <input
-        ref={cameraRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={onFile}
-      />
-      {/* Pick one or more existing photos from the gallery / file system. */}
-      <input
-        ref={libraryRef}
-        type="file"
-        accept="image/*"
-        multiple
-        className="hidden"
-        onChange={onFile}
-      />
-
       <div className="grid grid-cols-2 gap-3">
         <button
           className="btn btn-primary py-3"
-          onClick={() => cameraRef.current?.click()}
+          onClick={triggerCamera}
         >
           <svg width={20} height={20} viewBox="0 0 24 24" fill="none">
             <path
@@ -429,7 +429,7 @@ export function FoodScanner({ date }: { date: string }) {
         </button>
         <button
           className="btn btn-ghost py-3"
-          onClick={() => libraryRef.current?.click()}
+          onClick={triggerLibrary}
         >
           <svg width={20} height={20} viewBox="0 0 24 24" fill="none">
             <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth={1.8} />
@@ -502,13 +502,13 @@ export function FoodScanner({ date }: { date: string }) {
                   {pending.length < 6 && (
                     <div className="grid grid-rows-2 gap-1 aspect-square">
                       <button
-                        onClick={() => cameraRef.current?.click()}
+                        onClick={triggerCamera}
                         className="rounded-lg bg-[var(--surface-2)] grid place-items-center text-[10px] text-[var(--muted)]"
                       >
                         + Camera
                       </button>
                       <button
-                        onClick={() => libraryRef.current?.click()}
+                        onClick={triggerLibrary}
                         className="rounded-lg bg-[var(--surface-2)] grid place-items-center text-[10px] text-[var(--muted)]"
                       >
                         + Upload
