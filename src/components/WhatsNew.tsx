@@ -75,7 +75,19 @@ export function WhatsNew() {
           ))}
         </div>
 
-        <button className="btn btn-primary w-full py-3 mt-6" onClick={dismiss}>
+        <div className="mt-5 rounded-xl px-3 py-2.5 text-xs text-[var(--muted)] flex items-start gap-2"
+          style={{ background: "var(--surface-2)" }}>
+          <span>🔄</span>
+          <span>
+            Features not showing up?{" "}
+            <strong className="text-[var(--foreground)]">
+              Fully close the app and reopen it
+            </strong>{" "}
+            to apply the latest update.
+          </span>
+        </div>
+
+        <button className="btn btn-primary w-full py-3 mt-3" onClick={dismiss}>
           Got it
         </button>
       </div>

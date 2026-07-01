@@ -10,6 +10,18 @@ export interface ChangelogEntry {
 // Newest first. Bump `build` whenever you want the popup to show again.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    build: 11,
+    version: "1.10",
+    date: "2026-07-01",
+    title: "More reliable scanning & AI explanations",
+    items: [
+      "Ask the AI to explain its logic — tap \"Explain your logic\" in any chat to see exactly how it identified each item, judged portions, and got the calories.",
+      "Quick-tap chips in chat: \"Why these calories?\", \"Anything missing?\", and \"I ate less\" so you don't have to type.",
+      "Fixed intermittent upload failures on iOS (the 'string did not match expected pattern' error) — caused by a schema change in the last update.",
+      "Gemini high-demand errors now automatically retry on a fallback model instead of failing outright.",
+    ],
+  },
+  {
     build: 10,
     version: "1.9",
     date: "2026-06-30",
