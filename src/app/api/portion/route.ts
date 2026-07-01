@@ -127,8 +127,9 @@ export async function POST(req: Request) {
           { status: 401 },
         );
       }
-      if (/\b429\b|quota|rate.?limit/i.test(message)) {
-        quotaBlocked = true;
+      const isOverloaded503 = /\b503\b|overload|high.?demand|service.?unavailable/i.test(message);
+      if (/\b429\b|quota|rate.?limit/i.test(message) || isOverloaded503) {
+        quotaBlocked = /\b429\b|quota|rate.?limit/i.test(message) || quotaBlocked;
         continue;
       }
       break;

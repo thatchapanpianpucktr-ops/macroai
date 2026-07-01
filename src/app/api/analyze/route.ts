@@ -138,7 +138,7 @@ const responseSchema = {
     mealName: { type: SchemaType.STRING },
     note: { type: SchemaType.STRING },
   },
-  required: ["reasoning", "items"],
+  required: ["items"],
 } as const;
 
 export async function POST(req: Request) {
@@ -285,12 +285,13 @@ export async function POST(req: Request) {
         );
       }
       const isQuota = /\b429\b|quota|rate.?limit/i.test(message);
-      if (isQuota) {
-        quotaBlocked = true;
+      const isOverloaded = /\b503\b|overload|high.?demand|service.?unavailable/i.test(message);
+      if (isQuota || isOverloaded) {
+        quotaBlocked = isQuota || quotaBlocked;
         // try the next model
         continue;
       }
-      // Non-quota error (bad image, etc.) — stop early.
+      // Non-retriable error (bad image, invalid key, etc.) — stop early.
       break;
     }
   }
