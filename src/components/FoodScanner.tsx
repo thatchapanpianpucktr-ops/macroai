@@ -130,9 +130,14 @@ export function FoodScanner({ date }: { date: string }) {
               ],
         );
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Couldn't read that photo.",
-        );
+        const raw = err instanceof Error ? err.message : "";
+        // iOS Safari throws a cryptic WebKit error for unsupported image formats.
+        // Replace it with a clear, actionable message.
+        const msg =
+          raw && !/string did not match|expected pattern|decode/i.test(raw)
+            ? raw
+            : "Couldn't read that photo. Try saving it as a JPG first, or take a new one.";
+        setError(msg);
       }
     }
   }

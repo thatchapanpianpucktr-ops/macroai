@@ -114,25 +114,14 @@ const responseSchema = {
           protein: { type: SchemaType.NUMBER },
           carbs: { type: SchemaType.NUMBER },
           fat: { type: SchemaType.NUMBER },
-          confidence: {
-            type: SchemaType.STRING,
-            format: "enum",
-            enum: ["high", "medium", "low"],
-          },
+          // confidence is a free-form string; we normalise it in post-processing
+          // so removing the strict enum constraint prevents Gemini schema
+          // validation errors under load ("string did not match the expected pattern").
+          confidence: { type: SchemaType.STRING },
           calorieMin: { type: SchemaType.NUMBER },
           calorieMax: { type: SchemaType.NUMBER },
         },
-        required: [
-          "name",
-          "grams",
-          "calories",
-          "protein",
-          "carbs",
-          "fat",
-          "confidence",
-          "calorieMin",
-          "calorieMax",
-        ],
+        required: ["name", "grams", "calories", "protein", "carbs", "fat"],
       },
     },
     mealName: { type: SchemaType.STRING },
@@ -286,9 +275,12 @@ export async function POST(req: Request) {
       }
       const isQuota = /\b429\b|quota|rate.?limit/i.test(message);
       const isOverloaded = /\b503\b|overload|high.?demand|service.?unavailable/i.test(message);
-      if (isQuota || isOverloaded) {
+      // Gemini structured-output schema validation failures ("The string did not
+      // match the expected pattern") are transient — retrying on the next model
+      // usually succeeds.
+      const isSchemaError = /string did not match|expected pattern/i.test(message);
+      if (isQuota || isOverloaded || isSchemaError) {
         quotaBlocked = isQuota || quotaBlocked;
-        // try the next model
         continue;
       }
       // Non-retriable error (bad image, invalid key, etc.) — stop early.

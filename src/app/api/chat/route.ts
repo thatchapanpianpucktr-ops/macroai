@@ -217,7 +217,8 @@ ${transcript}`;
         );
       }
       const isOverloaded503 = /\b503\b|overload|high.?demand|service.?unavailable/i.test(message);
-      if (/\b429\b|quota|rate.?limit/i.test(message) || isOverloaded503) {
+      const isSchemaError = /string did not match|expected pattern/i.test(message);
+      if (/\b429\b|quota|rate.?limit/i.test(message) || isOverloaded503 || isSchemaError) {
         quotaBlocked = /\b429\b|quota|rate.?limit/i.test(message) || quotaBlocked;
         continue;
       }
