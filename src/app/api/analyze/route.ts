@@ -21,15 +21,13 @@ Identify each distinct food or drink item in the photo(s). For composite dishes
 (stir-fries, salads, sandwiches, curries), break them into their main components
 when that improves accuracy.
 
-THINK FIRST: Before giving numbers, work through the problem in the "reasoning"
-field, step by step:
+THINK STEP BY STEP before giving any numbers:
 1. List what foods/drinks you see and how you identified each (ingredients, cooking method).
 2. For each, estimate the portion by comparing it to visible reference objects
    (plate, utensils, hand, packaging) — state the reference you used.
 3. Derive realistic per-100g nutrition, then scale to the portion.
 4. Sanity-check totals against what a typical serving of this dish weighs.
-Reasoning should be concise but show the actual estimation logic — this is what
-makes the numbers accurate. Then fill the structured fields to MATCH your reasoning.
+Then fill the structured fields to match your thinking.
 
 MULTIPLE PHOTOS: You may receive several photos of the SAME meal or product
 (e.g. the front of a package and its nutrition label, or the same plate from
@@ -69,9 +67,9 @@ const TEXT_PROMPT = `You are a meticulous nutrition estimation assistant for a c
 The user describes in words what they ate (e.g. "50g banana, 2 boiled eggs, a cup of rice").
 Identify each distinct food or drink item from the description.
 
-THINK FIRST: In the "reasoning" field, briefly work through each item — the likely
+THINK STEP BY STEP before giving numbers: for each item work through the likely
 preparation, how you converted the stated amount to grams, the per-100g nutrition,
-and the scaled result. Then fill the structured fields to MATCH your reasoning.
+and the scaled result. Then fill the structured fields to match your thinking.
 
 PORTION SIZE:
 - Use any quantities or weights the user gives (grams, pieces, cups, tbsp, slices).
@@ -100,9 +98,6 @@ Rules:
 const responseSchema = {
   type: SchemaType.OBJECT,
   properties: {
-    // Listed first so the model reasons before committing to numbers
-    // (structured output is generated in property order).
-    reasoning: { type: SchemaType.STRING },
     items: {
       type: SchemaType.ARRAY,
       items: {

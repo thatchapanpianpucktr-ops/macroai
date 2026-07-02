@@ -103,8 +103,6 @@ export interface AnalyzeResponse {
   items: AnalyzedItem[];
   /** a short natural name for the whole meal, suggested by the model */
   mealName?: string;
-  /** the model's step-by-step reasoning for how it estimated the meal */
-  reasoning?: string;
   note?: string;
 }
 

@@ -47,8 +47,6 @@ export function FoodScanner({ date }: { date: string }) {
   const [manual, setManual] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  // The model's step-by-step reasoning from the scan, so it can explain itself in chat.
-  const [reasoning, setReasoning] = useState<string | undefined>(undefined);
   // By default a scan logs as ONE combined entry (most people forget to group).
   const [combineAll, setCombineAll] = useState(true);
   const [mealName, setMealName] = useState("");
@@ -78,7 +76,6 @@ export function FoodScanner({ date }: { date: string }) {
     setManual(false);
     setChatOpen(false);
     setChatMessages([]);
-    setReasoning(undefined);
     setCombineAll(true);
     setMealName("");
   }
@@ -219,7 +216,6 @@ export function FoodScanner({ date }: { date: string }) {
       setMealName(
         (data.mealName ?? "").trim() || deriveMealName(newItems),
       );
-      setReasoning((data.reasoning ?? "").trim() || undefined);
       setAnalyzed(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -877,7 +873,6 @@ export function FoodScanner({ date }: { date: string }) {
           fat: it.fat,
         }))}
         images={pending.map((p) => ({ base64: p.base64, mimeType: p.mimeType }))}
-        reasoning={reasoning}
         messages={chatMessages}
         onMessagesChange={setChatMessages}
         onApplyItems={applyChatItems}
