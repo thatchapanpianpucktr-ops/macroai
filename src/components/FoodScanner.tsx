@@ -218,7 +218,12 @@ export function FoodScanner({ date }: { date: string }) {
       );
       setAnalyzed(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      const raw = err instanceof Error ? err.message : "";
+      const msg =
+        raw && !/string did not match|expected pattern/i.test(raw)
+          ? raw
+          : "Scan failed. Please try again in a moment.";
+      setError(msg);
     } finally {
       setLoading(false);
     }

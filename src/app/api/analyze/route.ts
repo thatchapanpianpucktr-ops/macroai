@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { AnalyzeResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -16,6 +16,13 @@ const MODELS = [
   "gemini-flash-latest",
 ].filter((m): m is string => Boolean(m));
 
+// JSON shape the model must return (described in the prompt, not enforced via
+// responseSchema — using responseSchema causes "string did not match the
+// expected pattern" constraint-decoder errors under load).
+const JSON_SHAPE = `Return ONLY valid JSON with no markdown fences in exactly this shape:
+{"items":[{"name":"string","grams":0,"calories":0,"protein":0,"carbs":0,"fat":0,"confidence":"high","calorieMin":0,"calorieMax":0}],"mealName":"string","note":"string"}
+Omit "note" if there is nothing to add.`;
+
 const PROMPT = `You are a meticulous nutrition estimation assistant for a calorie-tracking app.
 Identify each distinct food or drink item in the photo(s). For composite dishes
 (stir-fries, salads, sandwiches, curries), break them into their main components
@@ -27,7 +34,6 @@ THINK STEP BY STEP before giving any numbers:
    (plate, utensils, hand, packaging) — state the reference you used.
 3. Derive realistic per-100g nutrition, then scale to the portion.
 4. Sanity-check totals against what a typical serving of this dish weighs.
-Then fill the structured fields to match your thinking.
 
 MULTIPLE PHOTOS: You may receive several photos of the SAME meal or product
 (e.g. the front of a package and its nutrition label, or the same plate from
@@ -46,22 +52,20 @@ NUTRITION:
 - First estimate realistic per-100g values for the food, then scale to your portion.
 - Account for HIDDEN calories in cooked/restaurant food: cooking oil, butter, dressings,
   sauces, and added sugar. Do not assume plain/dry unless it clearly is.
-- Enforce internal consistency: calories must be ≈ protein*4 + carbs*4 + fat*9 (within ~10%).
+- Enforce internal consistency: calories must be approximately protein*4 + carbs*4 + fat*9.
   Reconcile the numbers until they agree.
 
-For EACH item also return:
-- "confidence": one of "high", "medium", "low" — driven mainly by how clear the portion is
-  and how identifiable the food is.
+For EACH item provide:
+- "confidence": one of "high", "medium", or "low" — driven mainly by how clear the portion is.
 - "calorieMin" and "calorieMax": a realistic calorie range reflecting portion uncertainty.
-
-Also return "mealName": a short, natural name for the WHOLE meal/dish as a person would
-say it (e.g. "Chicken rice with fried egg", "Latte & croissant", "Pad thai with prawns").
-Name it after the actual foods present — never a generic placeholder like "Meal" or "Bento box".
+- "mealName": a short natural name for the WHOLE meal (e.g. "Chicken rice with egg").
 
 Rules:
 - Be realistic, not optimistic. When unsure about portion, choose the most likely typical serving.
 - If the image clearly contains no food, return an empty items array and a short note.
-- Round grams and calories to integers; macros to at most one decimal.`;
+- Round grams and calories to integers; macros to at most one decimal.
+
+${JSON_SHAPE}`;
 
 const TEXT_PROMPT = `You are a meticulous nutrition estimation assistant for a calorie-tracking app.
 The user describes in words what they ate (e.g. "50g banana, 2 boiled eggs, a cup of rice").
@@ -69,7 +73,7 @@ Identify each distinct food or drink item from the description.
 
 THINK STEP BY STEP before giving numbers: for each item work through the likely
 preparation, how you converted the stated amount to grams, the per-100g nutrition,
-and the scaled result. Then fill the structured fields to match your thinking.
+and the scaled result.
 
 PORTION SIZE:
 - Use any quantities or weights the user gives (grams, pieces, cups, tbsp, slices).
@@ -80,50 +84,19 @@ PORTION SIZE:
 NUTRITION:
 - Estimate realistic per-100g values then scale to the portion.
 - Account for typical added oil/butter/sugar in prepared foods unless told otherwise.
-- Enforce internal consistency: calories must be ≈ protein*4 + carbs*4 + fat*9 (within ~10%).
-  Reconcile the numbers until they agree.
+- Enforce internal consistency: calories must be approximately protein*4 + carbs*4 + fat*9.
 
-For EACH item also return:
-- "confidence": one of "high", "medium", "low" — lower it when the user didn't specify a quantity.
+For EACH item provide:
+- "confidence": one of "high", "medium", or "low".
 - "calorieMin" and "calorieMax": a realistic calorie range reflecting the uncertainty.
-
-Also return "mealName": a short, natural name for the whole thing the user described
-(e.g. "Banana & boiled eggs"). Name it after the actual foods, not a generic placeholder.
+- "mealName": a short natural name for the whole thing described.
 
 Rules:
 - Be realistic, not optimistic.
 - If the text describes no food, return an empty items array and a short note.
-- Round grams and calories to integers; macros to at most one decimal.`;
+- Round grams and calories to integers; macros to at most one decimal.
 
-const responseSchema = {
-  type: SchemaType.OBJECT,
-  properties: {
-    items: {
-      type: SchemaType.ARRAY,
-      items: {
-        type: SchemaType.OBJECT,
-        properties: {
-          name: { type: SchemaType.STRING },
-          grams: { type: SchemaType.NUMBER },
-          calories: { type: SchemaType.NUMBER },
-          protein: { type: SchemaType.NUMBER },
-          carbs: { type: SchemaType.NUMBER },
-          fat: { type: SchemaType.NUMBER },
-          // confidence is a free-form string; we normalise it in post-processing
-          // so removing the strict enum constraint prevents Gemini schema
-          // validation errors under load ("string did not match the expected pattern").
-          confidence: { type: SchemaType.STRING },
-          calorieMin: { type: SchemaType.NUMBER },
-          calorieMax: { type: SchemaType.NUMBER },
-        },
-        required: ["name", "grams", "calories", "protein", "carbs", "fat"],
-      },
-    },
-    mealName: { type: SchemaType.STRING },
-    note: { type: SchemaType.STRING },
-  },
-  required: ["items"],
-} as const;
+${JSON_SHAPE}`;
 
 export async function POST(req: Request) {
   let body: {
@@ -202,9 +175,9 @@ export async function POST(req: Request) {
       const model = genAI.getGenerativeModel({
         model: modelName,
         generationConfig: {
+          // responseMimeType asks for JSON output without the constrained
+          // decoder that causes "string did not match the expected pattern".
           responseMimeType: "application/json",
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          responseSchema: responseSchema as any,
           temperature: 0.2,
         },
       });
@@ -263,22 +236,18 @@ export async function POST(req: Request) {
         return NextResponse.json(
           {
             error:
-              "Your Gemini API key was rejected. Double-check it in Settings (it should start with “AIza”).",
+              "Your Gemini API key was rejected. Double-check it in Settings (it should start with \"AIza\").",
           },
           { status: 401 },
         );
       }
       const isQuota = /\b429\b|quota|rate.?limit/i.test(message);
       const isOverloaded = /\b503\b|overload|high.?demand|service.?unavailable/i.test(message);
-      // Gemini structured-output schema validation failures ("The string did not
-      // match the expected pattern") are transient — retrying on the next model
-      // usually succeeds.
-      const isSchemaError = /string did not match|expected pattern/i.test(message);
-      if (isQuota || isOverloaded || isSchemaError) {
+      if (isQuota || isOverloaded) {
         quotaBlocked = isQuota || quotaBlocked;
         continue;
       }
-      // Non-retriable error (bad image, invalid key, etc.) — stop early.
+      // Non-retriable error — stop early.
       break;
     }
   }
