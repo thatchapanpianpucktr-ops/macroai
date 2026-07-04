@@ -381,6 +381,26 @@ export default function SettingsPage() {
               {apiKey ? "Using your key ✓" : "No key — scanning disabled"}
             </span>
           </div>
+
+          <div className="pt-2 border-t border-[var(--surface-2)]">
+            <label className="text-xs text-[var(--muted)] mb-1 block">
+              Gemini model
+            </label>
+            <select
+              className="input w-full"
+              value={settings.geminiModel ?? ""}
+              onChange={(e) => update({ geminiModel: e.target.value })}
+            >
+              <option value="">Auto — Gemini 2.5 Flash (free, recommended)</option>
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash (free)</option>
+              <option value="gemini-2.5-pro">Gemini 2.5 Pro (paid — most accurate)</option>
+              <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+              <option value="gemini-2.0-flash">Gemini 2.0 Flash (older free)</option>
+            </select>
+            <p className="text-[11px] text-[var(--muted)] mt-1">
+              Pro models are more accurate but use your paid quota. Flash is free-tier and very capable.
+            </p>
+          </div>
         </section>
       )}
 

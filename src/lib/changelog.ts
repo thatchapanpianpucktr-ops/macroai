@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 // Newest first. Bump `build` whenever you want the popup to show again.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    build: 12,
+    version: "1.11",
+    date: "2026-07-04",
+    title: "AI explains itself + pick your Gemini model",
+    items: [
+      "Chat opens automatically after every scan and shows the AI's thinking right away -- no need to ask it to explain.",
+      "New: choose your Gemini model in Settings (under your API key). Gemini 2.5 Flash is the free default; switch to 2.5 Pro for best accuracy if you have a paid plan.",
+      "Restart the app to make sure you have the latest version.",
+    ],
+  },
+  {
     build: 11,
     version: "1.10",
     date: "2026-07-01",

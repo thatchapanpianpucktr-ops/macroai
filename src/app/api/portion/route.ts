@@ -57,6 +57,11 @@ export async function POST(req: Request) {
     );
   }
 
+  const preferredModel = (body.model ?? "").trim();
+  const models = preferredModel
+    ? [preferredModel, ...MODELS.filter((m) => m !== preferredModel)]
+    : MODELS;
+
   const images = (Array.isArray(body.images) ? body.images : [])
     .filter(
       (im): im is { base64: string; mimeType: string } =>
@@ -91,7 +96,7 @@ export async function POST(req: Request) {
   let lastError = "";
   let quotaBlocked = false;
 
-  for (const modelName of MODELS) {
+  for (const modelName of models) {
     try {
       const model = genAI.getGenerativeModel({
         model: modelName,

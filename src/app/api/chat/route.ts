@@ -114,6 +114,11 @@ export async function POST(req: Request) {
     );
   }
 
+  const preferredModel = (body.model ?? "").trim();
+  const models = preferredModel
+    ? [preferredModel, ...MODELS.filter((m) => m !== preferredModel)]
+    : MODELS;
+
   const messages = (Array.isArray(body.messages) ? body.messages : [])
     .filter((m) => m && typeof m.content === "string" && m.content.trim())
     .map((m) => ({
@@ -177,7 +182,7 @@ ${transcript}`;
   let lastError = "";
   let quotaBlocked = false;
 
-  for (const modelName of MODELS) {
+  for (const modelName of models) {
     try {
       const model = genAI.getGenerativeModel({
         model: modelName,

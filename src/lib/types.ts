@@ -23,6 +23,8 @@ export interface Settings {
   unit: "metric" | "imperial";
   /** IANA timezone for deciding the calendar "day"; "" = use device timezone */
   timeZone: string;
+  /** preferred Gemini model; "" = use the app default (gemini-2.5-flash) */
+  geminiModel: string;
   /** when true, use the user-entered targets below instead of the adaptive calculation */
   useCustomTargets: boolean;
   customCalories: number;
@@ -103,6 +105,8 @@ export interface AnalyzeResponse {
   items: AnalyzedItem[];
   /** a short natural name for the whole meal, suggested by the model */
   mealName?: string;
+  /** a brief natural-language explanation of how the AI identified and estimated the meal */
+  explanation?: string;
   note?: string;
 }
 
@@ -118,6 +122,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fatPctOfCalories: 0.27,
   unit: "metric",
   timeZone: "",
+  geminiModel: "",
   useCustomTargets: false,
   customCalories: 2000,
   customProtein: 150,

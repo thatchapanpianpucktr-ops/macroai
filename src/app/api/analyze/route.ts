@@ -20,8 +20,9 @@ const MODELS = [
 // responseSchema — using responseSchema causes "string did not match the
 // expected pattern" constraint-decoder errors under load).
 const JSON_SHAPE = `Return ONLY valid JSON with no markdown fences in exactly this shape:
-{"items":[{"name":"string","grams":0,"calories":0,"protein":0,"carbs":0,"fat":0,"confidence":"high","calorieMin":0,"calorieMax":0}],"mealName":"string","note":"string"}
-Omit "note" if there is nothing to add.`;
+{"items":[{"name":"string","grams":0,"calories":0,"protein":0,"carbs":0,"fat":0,"confidence":"high","calorieMin":0,"calorieMax":0}],"mealName":"string","explanation":"string","note":"string"}
+- "explanation": 2-3 natural sentences summarising what you identified and the key reasoning behind your estimates (e.g. which reference objects you used for portion size, any hidden calories you accounted for). Write it as if talking to the user directly — "I can see a plate of pad thai...".
+- Omit "note" if there is nothing extra to add.`;
 
 const PROMPT = `You are a meticulous nutrition estimation assistant for a calorie-tracking app.
 Identify each distinct food or drink item in the photo(s). For composite dishes
@@ -125,6 +126,12 @@ export async function POST(req: Request) {
     );
   }
 
+  // Honour user's preferred model (from Settings) by trying it first.
+  const preferredModel = (body.model ?? "").trim();
+  const models = preferredModel
+    ? [preferredModel, ...MODELS.filter((m) => m !== preferredModel)]
+    : MODELS;
+
   const { imageBase64, mimeType, hint, description } = body;
   const desc = (description ?? "").trim();
 
@@ -170,7 +177,7 @@ export async function POST(req: Request) {
   let lastError = "";
   let quotaBlocked = false;
 
-  for (const modelName of MODELS) {
+  for (const modelName of models) {
     try {
       const model = genAI.getGenerativeModel({
         model: modelName,

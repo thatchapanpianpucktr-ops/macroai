@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { downscale } from "@/lib/image";
-import { useApiKey } from "@/lib/store";
+import { useApiKey, useSettings } from "@/lib/store";
 import { openApiKeyPrompt } from "@/lib/apikey-prompt";
 import type { ChatMessage } from "@/lib/types";
 
@@ -46,6 +46,7 @@ export function ChatPanel({
   onApplyItems: (items: ChatItem[]) => void;
 }) {
   const [apiKey] = useApiKey();
+  const [settings] = useSettings();
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -128,6 +129,7 @@ export function ChatPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           apiKey,
+          model: settings.geminiModel?.trim() || undefined,
           kind,
           items,
           images: sentImages,

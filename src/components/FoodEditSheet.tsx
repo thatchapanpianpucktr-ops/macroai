@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { NumberInput } from "@/components/NumberInput";
 import { MEAL_LABELS, MEAL_ORDER } from "@/lib/meal";
 import { downscale } from "@/lib/image";
-import { useApiKey } from "@/lib/store";
+import { useApiKey, useSettings } from "@/lib/store";
 import { openApiKeyPrompt } from "@/lib/apikey-prompt";
 import { ChatPanel, type ChatItem } from "@/components/ChatPanel";
 import type { ChatMessage, FoodEntry, Meal } from "@/lib/types";
@@ -52,6 +52,7 @@ export function FoodEditSheet({
   const [base, setBase] = useState<Base | null>(null);
   const [fraction, setFraction] = useState(1);
   const [apiKey] = useApiKey();
+  const [settings] = useSettings();
   const leftoverRef = useRef<HTMLInputElement>(null);
   const [note, setNote] = useState("");
   const [portionLoading, setPortionLoading] = useState(false);
@@ -127,6 +128,7 @@ export function FoodEditSheet({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           apiKey,
+          model: settings.geminiModel?.trim() || undefined,
           original: {
             name: entry.name,
             grams: base.grams,

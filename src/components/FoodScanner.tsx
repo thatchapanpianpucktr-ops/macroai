@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { downscale } from "@/lib/image";
-import { useApiKey, useFoods } from "@/lib/store";
+import { useApiKey, useFoods, useSettings } from "@/lib/store";
 import { openApiKeyPrompt } from "@/lib/apikey-prompt";
 import { NumberInput } from "@/components/NumberInput";
 import { ChatPanel, type ChatItem } from "@/components/ChatPanel";
@@ -31,6 +31,7 @@ interface DraftItem extends AnalyzedItem {
 export function FoodScanner({ date }: { date: string }) {
   const { add } = useFoods();
   const [apiKey] = useApiKey();
+  const [settings] = useSettings();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -182,6 +183,7 @@ export function FoodScanner({ date }: { date: string }) {
     setLoading(true);
     setError(null);
     try {
+      const preferredModel = settings.geminiModel?.trim() || undefined;
       const payload =
         pending.length > 0
           ? {
@@ -191,8 +193,9 @@ export function FoodScanner({ date }: { date: string }) {
               })),
               hint: hint.trim() || undefined,
               apiKey: apiKey || undefined,
+              model: preferredModel,
             }
-          : { description: hint.trim(), apiKey: apiKey || undefined };
+          : { description: hint.trim(), apiKey: apiKey || undefined, model: preferredModel };
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -216,6 +219,15 @@ export function FoodScanner({ date }: { date: string }) {
       setMealName(
         (data.mealName ?? "").trim() || deriveMealName(newItems),
       );
+      // Auto-open the chat panel with the AI's explanation so the user
+      // sees the reasoning immediately without having to ask for it.
+      const explanation = data.explanation;
+      if (explanation?.trim()) {
+        setChatMessages([
+          { role: "assistant", content: explanation.trim(), at: new Date().toISOString() },
+        ]);
+        setChatOpen(true);
+      }
       setAnalyzed(true);
     } catch (err) {
       const raw = err instanceof Error ? err.message : "";
