@@ -391,13 +391,14 @@ export default function SettingsPage() {
               value={settings.geminiModel ?? ""}
               onChange={(e) => update({ geminiModel: e.target.value })}
             >
-              <option value="">Auto — Gemini 2.5 Flash (free, recommended)</option>
-              <option value="gemini-2.5-flash">Gemini 2.5 Flash — free tier</option>
-              <option value="gemini-2.0-flash">Gemini 2.0 Flash — free tier (older)</option>
+              <option value="">Auto — Gemini 3.5 Flash (free, recommended)</option>
+              <option value="gemini-3.5-flash">Gemini 3.5 Flash — free, newest & smartest</option>
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash — free, previous gen</option>
+              <option value="gemini-2.0-flash">Gemini 2.0 Flash — free, older</option>
               <option value="gemini-2.5-pro">Gemini 2.5 Pro — paid, most accurate</option>
             </select>
             <p className="text-[11px] text-[var(--muted)] mt-1">
-              Flash models are free-tier and very capable. Switch to Pro only if you have a paid Gemini plan.
+              3.5 Flash is the default — free and Google's most capable Flash model. Switch to Pro only if you have a paid Gemini plan.
             </p>
           </div>
         </section>

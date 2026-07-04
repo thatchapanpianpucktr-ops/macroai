@@ -6,11 +6,11 @@ export const maxDuration = 30;
 
 const MODELS = [
   process.env.GEMINI_MODEL,
+  "gemini-3.5-flash",
   "gemini-2.5-flash",
   "gemini-2.5-pro",
   "gemini-2.0-flash",
   "gemini-2.5-flash-lite",
-  "gemini-flash-latest",
 ].filter((m): m is string => Boolean(m));
 
 const PROMPT = `You estimate how much of a meal a person actually ATE.
