@@ -94,6 +94,7 @@ function reconcile(raw: Partial<Item>): Item {
 export async function POST(req: Request) {
   let body: {
     apiKey?: string;
+    model?: string;
     kind?: "scan" | "item";
     items?: Partial<Item>[];
     images?: { base64?: string; mimeType?: string }[];

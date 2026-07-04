@@ -39,6 +39,7 @@ const responseSchema = {
 export async function POST(req: Request) {
   let body: {
     apiKey?: string;
+    model?: string;
     original?: { name?: string; grams?: number; calories?: number };
     images?: { base64?: string; mimeType?: string }[];
     note?: string;

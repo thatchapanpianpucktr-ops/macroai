@@ -107,6 +107,7 @@ export async function POST(req: Request) {
     hint?: string;
     description?: string;
     apiKey?: string;
+    model?: string;
   };
   try {
     body = await req.json();
