@@ -392,13 +392,12 @@ export default function SettingsPage() {
               onChange={(e) => update({ geminiModel: e.target.value })}
             >
               <option value="">Auto — Gemini 2.5 Flash (free, recommended)</option>
-              <option value="gemini-2.5-flash">Gemini 2.5 Flash (free)</option>
-              <option value="gemini-2.5-pro">Gemini 2.5 Pro (paid — most accurate)</option>
-              <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
-              <option value="gemini-2.0-flash">Gemini 2.0 Flash (older free)</option>
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash — free tier</option>
+              <option value="gemini-2.0-flash">Gemini 2.0 Flash — free tier (older)</option>
+              <option value="gemini-2.5-pro">Gemini 2.5 Pro — paid, most accurate</option>
             </select>
             <p className="text-[11px] text-[var(--muted)] mt-1">
-              Pro models are more accurate but use your paid quota. Flash is free-tier and very capable.
+              Flash models are free-tier and very capable. Switch to Pro only if you have a paid Gemini plan.
             </p>
           </div>
         </section>
