@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -13,6 +13,14 @@ const MODELS = [
   "gemini-2.5-flash-lite",
 ].filter((m): m is string => Boolean(m));
 
+// JSON shape embedded in the prompt (not via responseSchema — the constrained
+// decoder is fragile and omits optional fields like "items" on longer contexts,
+// causing silent update failures after the first exchange).
+const JSON_SHAPE = `Return ONLY valid JSON with no markdown fences in exactly this shape:
+{"reply":"string","updated":false,"items":[{"name":"string","grams":0,"calories":0,"protein":0,"carbs":0,"fat":0}]}
+IMPORTANT: when updated is true you MUST always include the full items array — never omit it.
+When updated is false, still include "items" as an empty array [].`;
+
 const SYSTEM = `You are a friendly, sharp nutrition coach inside a calorie-tracking app.
 The user is reviewing a logged meal/item and wants to DISCUSS the estimate with you —
 they may agree, disagree, ask why, or tell you to change something
@@ -25,7 +33,7 @@ How to respond:
 - If their feedback means the numbers should change, set "updated" to true and return
   the FULL revised "items" list (every item, not just the changed one), keeping items
   they didn't mention the same. If nothing should change, set "updated" to false and
-  you may omit / return the items unchanged.
+  return an empty items array.
 - When given photos (the meal or leftovers), use them to ground your reasoning.
 - Keep calories internally consistent: calories ≈ protein*4 + carbs*4 + fat*9.
 - Be honest: if you think their adjustment is unrealistic, say so and propose a sensible
@@ -35,30 +43,9 @@ How to respond:
   and how the calories/macros were derived. Use the "original reasoning" below if provided.
 - Keep replies short (1-3 sentences) UNLESS the user asks you to explain your logic, in
   which case a clear short paragraph or a few bullet points is fine.
-- Round grams & calories to integers, macros to one decimal.`;
+- Round grams & calories to integers, macros to one decimal.
 
-const itemSchema = {
-  type: SchemaType.OBJECT,
-  properties: {
-    name: { type: SchemaType.STRING },
-    grams: { type: SchemaType.NUMBER },
-    calories: { type: SchemaType.NUMBER },
-    protein: { type: SchemaType.NUMBER },
-    carbs: { type: SchemaType.NUMBER },
-    fat: { type: SchemaType.NUMBER },
-  },
-  required: ["name", "grams", "calories", "protein", "carbs", "fat"],
-} as const;
-
-const responseSchema = {
-  type: SchemaType.OBJECT,
-  properties: {
-    reply: { type: SchemaType.STRING },
-    updated: { type: SchemaType.BOOLEAN },
-    items: { type: SchemaType.ARRAY, items: itemSchema },
-  },
-  required: ["reply", "updated"],
-} as const;
+${JSON_SHAPE}`;
 
 type Item = {
   name: string;
@@ -189,8 +176,6 @@ ${transcript}`;
         model: modelName,
         generationConfig: {
           responseMimeType: "application/json",
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          responseSchema: responseSchema as any,
           temperature: 0.4,
         },
       });
