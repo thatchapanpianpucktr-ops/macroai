@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { downscale } from "@/lib/image";
 import { useApiKey, useFoods, useSettings } from "@/lib/store";
 import { openApiKeyPrompt } from "@/lib/apikey-prompt";
+import { saveDraft, clearDraft, loadDraft } from "@/lib/draft";
 import { NumberInput } from "@/components/NumberInput";
 import { ChatPanel, type ChatItem } from "@/components/ChatPanel";
 import type { AnalyzedItem, AnalyzeResponse, ChatMessage } from "@/lib/types";
@@ -28,7 +29,17 @@ interface DraftItem extends AnalyzedItem {
   groupName?: string;
 }
 
-export function FoodScanner({ date }: { date: string }) {
+export function FoodScanner({
+  date,
+  openWithDraft = false,
+  onDraftConsumed,
+}: {
+  date: string;
+  /** When true, restore the saved photo draft and open the scanner immediately. */
+  openWithDraft?: boolean;
+  /** Called once the draft has been loaded so the caller can hide the banner. */
+  onDraftConsumed?: () => void;
+}) {
   const { add } = useFoods();
   const [apiKey] = useApiKey();
   const [settings] = useSettings();
@@ -53,6 +64,27 @@ export function FoodScanner({ date }: { date: string }) {
   const [mealName, setMealName] = useState("");
 
   const cover = pending[0]?.thumb ?? null;
+
+  // Restore a saved draft and open the scanner when requested from outside.
+  useEffect(() => {
+    if (!openWithDraft) return;
+    const draft = loadDraft();
+    if (draft) {
+      setPending(draft.photos);
+      setHint(draft.hint);
+      setOpen(true);
+    }
+    onDraftConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openWithDraft]);
+
+  // Auto-save the draft whenever the pending photo list or hint changes so the
+  // user can pick up where they left off if they close the app before analyzing.
+  useEffect(() => {
+    if (pending.length > 0 && !analyzed) {
+      saveDraft(pending, hint);
+    }
+  }, [pending, hint, analyzed]);
 
   /** Best-effort name for a combined entry when the model didn't give one. */
   function deriveMealName(list: { name: string; calories: number }[]) {
@@ -79,6 +111,7 @@ export function FoodScanner({ date }: { date: string }) {
     setChatMessages([]);
     setCombineAll(true);
     setMealName("");
+    clearDraft();
   }
 
   /** Replace the draft list with the AI's revised items (from chat). */

@@ -10,6 +10,7 @@ import { FoodEditSheet } from "@/components/FoodEditSheet";
 import { QuickAdd } from "@/components/QuickAdd";
 import { WaterTracker } from "@/components/WaterTracker";
 import { useFoods, useSettings, useWeights } from "@/lib/store";
+import { loadDraft, clearDraft } from "@/lib/draft";
 import { currentWeight, estimateTDEE, resolveTargets } from "@/lib/tdee";
 import { addDaysYmd, todayYmd, ymdToLabel } from "@/lib/date";
 import { MEAL_ICONS, MEAL_LABELS, MEAL_ORDER } from "@/lib/meal";
@@ -22,6 +23,15 @@ export default function TodayPage() {
   const today = todayYmd(settings.timeZone);
   const [date, setDate] = useState(today);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Photo draft resume — check on mount whether there's a saved unanalyzed photo.
+  const [draftBanner, setDraftBanner] = useState<{ thumb: string; count: number } | null>(() => {
+    if (typeof window === "undefined") return null;
+    const d = loadDraft();
+    if (!d) return null;
+    return { thumb: d.photos[0].thumb, count: d.photos.length };
+  });
+  const [openWithDraft, setOpenWithDraft] = useState(false);
   const isToday = date === today;
   const isFuture = date >= today;
 
@@ -118,7 +128,52 @@ export default function TodayPage() {
         </div>
       </section>
 
-      <FoodScanner date={date} />
+      {draftBanner && (
+        <button
+          className="card p-3 flex items-center gap-3 w-full text-left active:opacity-80 border border-[var(--accent)]/40"
+          onClick={() => setOpenWithDraft(true)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={draftBanner.thumb}
+            alt=""
+            className="w-12 h-12 rounded-lg object-cover shrink-0"
+          />
+          <div className="flex-1 min-w-0">
+            <div className="font-medium text-sm">Resume your photo</div>
+            <div className="text-xs text-[var(--muted)]">
+              {draftBanner.count === 1
+                ? "1 photo waiting to be analyzed"
+                : `${draftBanner.count} photos waiting to be analyzed`}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium" style={{ color: "var(--accent)" }}>
+              Analyze →
+            </span>
+            <button
+              className="w-7 h-7 rounded-full bg-[var(--surface-2)] grid place-items-center text-[var(--muted)] text-base shrink-0"
+              aria-label="Dismiss draft"
+              onClick={(e) => {
+                e.stopPropagation();
+                clearDraft();
+                setDraftBanner(null);
+              }}
+            >
+              ×
+            </button>
+          </div>
+        </button>
+      )}
+
+      <FoodScanner
+        date={date}
+        openWithDraft={openWithDraft}
+        onDraftConsumed={() => {
+          setOpenWithDraft(false);
+          setDraftBanner(null);
+        }}
+      />
 
       <div className="grid grid-cols-2 gap-2">
         <FoodSearch date={date} />
