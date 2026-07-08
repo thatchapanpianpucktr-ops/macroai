@@ -1,4 +1,5 @@
 # MacroAI
+My own personal project that I made to develop my AI and ML skills, feel free to use as you like.
 
 A mobile-first **photo calorie tracker** with MacroFactor-style **adaptive targets**.
 Snap a photo of your meal → Google Gemini estimates calories & macros → review and log.
