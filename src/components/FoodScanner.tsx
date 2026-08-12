@@ -147,7 +147,8 @@ export function FoodScanner({
     for (const file of files) {
       try {
         const big = await downscale(file, 1536, 0.85);
-        const small = await downscale(file, 120, 0.7);
+        // Kept on the food entry for viewing; 800px balances clarity vs localStorage.
+        const small = await downscale(file, 800, 0.72);
         setPending((prev) =>
           prev.length >= 6
             ? prev

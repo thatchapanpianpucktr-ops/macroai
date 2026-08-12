@@ -52,10 +52,145 @@ function read<T>(key: Key, fallback: T): T {
   }
 }
 
+function isQuotaError(e: unknown): boolean {
+  return (
+    e instanceof DOMException &&
+    (e.name === "QuotaExceededError" ||
+      e.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+      // Some browsers use code 22 / 1014 without the modern name.
+      e.code === 22 ||
+      e.code === 1014)
+  );
+}
+
+/** Drop photos from the oldest food entries first (list is newest-first). */
+function stripOldestThumbs(foods: FoodEntry[], count: number): FoodEntry[] {
+  if (count <= 0) return foods;
+  const indices: number[] = [];
+  for (let i = foods.length - 1; i >= 0; i--) {
+    if (foods[i]?.thumb) indices.push(i);
+  }
+  const drop = new Set(indices.slice(0, count));
+  if (drop.size === 0) return foods;
+  return foods.map((f, i) => (drop.has(i) ? { ...f, thumb: undefined } : f));
+}
+
+function trySetItem(key: string, raw: string): boolean {
+  try {
+    window.localStorage.setItem(key, raw);
+    return true;
+  } catch (e) {
+    if (isQuotaError(e)) return false;
+    throw e;
+  }
+}
+
+/** Free space by dropping oldest food photos. Returns how many were removed. */
+function freeSpaceByStrippingThumbs(): number {
+  const list = read<FoodEntry[]>("foods", []);
+  const withThumbs = list.filter((f) => f.thumb).length;
+  if (withThumbs === 0) return 0;
+
+  const batch = Math.max(3, Math.ceil(withThumbs * 0.1));
+  let foods = stripOldestThumbs(list, batch);
+  const removed = Math.min(batch, withThumbs);
+  const raw = JSON.stringify(foods);
+  if (trySetItem(KEYS.foods, raw)) return removed;
+
+  // Still over quota — strip everything photo-related.
+  foods = foods.map((f) => (f.thumb ? { ...f, thumb: undefined } : f));
+  trySetItem(KEYS.foods, JSON.stringify(foods));
+  return withThumbs;
+}
+
 function write<T>(key: Key, value: T) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEYS[key], JSON.stringify(value));
+  const storageKey = KEYS[key];
+  let payload: unknown = value;
+  let raw = JSON.stringify(payload);
+
+  if (trySetItem(storageKey, raw)) {
+    emit();
+    return;
+  }
+
+  // Full-res scan drafts are the biggest reclaimable chunk.
+  try {
+    window.localStorage.removeItem("macroai.photoDraft.v1");
+  } catch {
+    /* ignore */
+  }
+
+  if (trySetItem(storageKey, raw)) {
+    emit();
+    return;
+  }
+
+  // Drop oldest kept meal photos until the write fits (macros stay).
+  if (key === "foods" && Array.isArray(value)) {
+    let foods = value as FoodEntry[];
+    const batch = Math.max(
+      3,
+      Math.ceil(foods.filter((f) => f.thumb).length * 0.1) || 3,
+    );
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const before = foods.filter((f) => f.thumb).length;
+      if (before === 0) break;
+      foods = stripOldestThumbs(foods, batch);
+      payload = foods;
+      raw = JSON.stringify(payload);
+      if (trySetItem(storageKey, raw)) {
+        emit();
+        return;
+      }
+    }
+    foods = foods.map((f) => (f.thumb ? { ...f, thumb: undefined } : f));
+    raw = JSON.stringify(foods);
+    if (trySetItem(storageKey, raw)) {
+      emit();
+      return;
+    }
+  } else {
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const freed = freeSpaceByStrippingThumbs();
+      if (freed === 0) break;
+      if (trySetItem(storageKey, raw)) {
+        emit();
+        return;
+      }
+    }
+  }
+
+  // Still full — surface the real browser error.
+  window.localStorage.setItem(storageKey, raw);
   emit();
+}
+
+/**
+ * Remove kept meal photos to free localStorage space.
+ * Meal macros stay; only the images go.
+ * Pass `olderThanDays` to keep recent photos (e.g. 14), or omit to clear all.
+ * Returns how many photos were removed.
+ */
+export function clearFoodThumbs(olderThanDays?: number): number {
+  if (typeof window === "undefined") return 0;
+  const list = read<FoodEntry[]>("foods", []);
+  const cutoff =
+    olderThanDays != null
+      ? Date.now() - olderThanDays * 24 * 60 * 60 * 1000
+      : null;
+  let removed = 0;
+  const next = list.map((f) => {
+    if (!f.thumb) return f;
+    if (cutoff != null) {
+      const t = Date.parse(f.createdAt || f.date);
+      if (!Number.isFinite(t) || t >= cutoff) return f;
+    }
+    removed += 1;
+    return { ...f, thumb: undefined };
+  });
+  if (removed > 0) write("foods", next);
+  return removed;
 }
 
 // ---- Settings ----------------------------------------------------------

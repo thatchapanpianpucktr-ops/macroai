@@ -87,7 +87,7 @@ export function ChatPanel({
     for (const file of files) {
       try {
         const big = await downscale(file, 1536, 0.85);
-        const small = await downscale(file, 120, 0.7);
+        const small = await downscale(file, 800, 0.72);
         setAttached((prev) =>
           prev.length >= 4
             ? prev

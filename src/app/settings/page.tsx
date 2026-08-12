@@ -7,6 +7,7 @@ import {
   useApiKey,
   exportAll,
   importAll,
+  clearFoodThumbs,
 } from "@/lib/store";
 import { currentWeight, estimateTDEE, resolveTargets } from "@/lib/tdee";
 import { todayYmd, TIMEZONE_OPTIONS } from "@/lib/date";
@@ -86,6 +87,31 @@ export default function SettingsPage() {
     } catch {
       setBackupMsg("Couldn't read that file — is it a MacroAI backup?");
     }
+  }
+
+  function clearOldPhotos() {
+    const n = clearFoodThumbs(14);
+    setBackupMsg(
+      n > 0
+        ? `Removed ${n} photo${n === 1 ? "" : "s"} older than 14 days. Meal logs kept.`
+        : "No photos older than 14 days to clear.",
+    );
+  }
+
+  function clearAllPhotos() {
+    if (
+      !window.confirm(
+        "Remove all kept meal photos on this device?\n\nYour food log and macros stay — only the pictures are deleted.",
+      )
+    ) {
+      return;
+    }
+    const n = clearFoodThumbs();
+    setBackupMsg(
+      n > 0
+        ? `Removed ${n} photo${n === 1 ? "" : "s"}. Meal logs kept.`
+        : "No photos to clear.",
+    );
   }
 
   function reopenWhatsNew() {
@@ -431,7 +457,33 @@ export default function SettingsPage() {
             className="hidden"
             onChange={onImportFile}
           />
-          {backupMsg && (
+          {backupMsg && !/photo/i.test(backupMsg) && (
+            <p className="text-xs" style={{ color: "var(--accent)" }}>
+              {backupMsg}
+            </p>
+          )}
+        </section>
+      )}
+
+      {settings.onboarded && (
+        <section className="card p-4 space-y-3">
+          <div>
+            <h2 className="font-semibold">Meal photos</h2>
+            <p className="text-xs text-[var(--muted)]">
+              Photos are kept at 800px on this device. When browser storage fills
+              up, the oldest photos are deleted automatically so new ones can
+              save. Meal macros are never removed.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <button className="btn btn-ghost py-3" onClick={clearOldPhotos}>
+              Clear older than 14 days
+            </button>
+            <button className="btn btn-ghost py-3" onClick={clearAllPhotos}>
+              Clear all photos
+            </button>
+          </div>
+          {backupMsg && /photo/i.test(backupMsg) && (
             <p className="text-xs" style={{ color: "var(--accent)" }}>
               {backupMsg}
             </p>

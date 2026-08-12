@@ -64,7 +64,7 @@ export interface FoodEntry {
   grams?: number;
   meal?: Meal;
   source: "ai" | "manual" | "db" | "barcode";
-  /** small base64 thumbnail for the log list */
+  /** kept meal photo (JPEG data URL, ~800px); dropped from oldest entries when storage fills */
   thumb?: string;
   /** saved AI discussion about this item, if any */
   chat?: ChatMessage[];

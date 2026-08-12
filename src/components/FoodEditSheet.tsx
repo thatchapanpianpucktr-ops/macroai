@@ -228,6 +228,15 @@ export function FoodEditSheet({
           </button>
         </div>
 
+        {entry.thumb ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={entry.thumb}
+            alt=""
+            className="w-full max-h-64 object-cover rounded-xl mb-4"
+          />
+        ) : null}
+
         <label className="block mb-3">
           <span className="text-xs text-[var(--muted)] mb-1 block">Name</span>
           <input

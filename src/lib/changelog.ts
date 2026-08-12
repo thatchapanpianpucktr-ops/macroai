@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 // Newest first. Bump `build` whenever you want the popup to show again.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    build: 13,
+    version: "1.12",
+    date: "2026-08-13",
+    title: "Clearer meal photos + auto storage cleanup",
+    items: [
+      "Kept meal photos are now 800px so you can review them clearly when you tap a logged item.",
+      "When device storage fills up, the oldest meal photos are deleted automatically so new scans can still save. Your food log and macros stay.",
+      "Settings → Meal photos: clear photos older than 14 days, or clear all photos.",
+    ],
+  },
+  {
     build: 12,
     version: "1.11",
     date: "2026-07-04",
