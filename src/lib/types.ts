@@ -129,3 +129,80 @@ export const DEFAULT_SETTINGS: Settings = {
   customCarbs: 200,
   customFat: 60,
 };
+
+// ---- Gym ---------------------------------------------------------------
+
+export type SplitTag =
+  | "push"
+  | "pull"
+  | "legs"
+  | "upper"
+  | "lower"
+  | "full"
+  | "cardio"
+  | "other";
+
+export type LoadMode = "weighted" | "bodyweight" | "assisted";
+
+export interface WorkoutSet {
+  reps: number;
+  /** working load when weighted */
+  weightKg?: number;
+  /** band/machine assist */
+  assistanceKg?: number;
+  /** extra load on bodyweight moves (weighted dips/pull-ups) */
+  addedKg?: number;
+  rpe?: number;
+}
+
+export interface WorkoutExercise {
+  name: string;
+  loadMode: LoadMode;
+  sets: WorkoutSet[];
+}
+
+export interface CardioBlock {
+  type: string;
+  minutes: number;
+  distanceKm?: number;
+  intensity?: "easy" | "moderate" | "hard";
+  estimatedKcal?: number;
+}
+
+export interface WorkoutSession {
+  id: string;
+  /** YYYY-MM-DD */
+  date: string;
+  createdAt: string;
+  split: SplitTag;
+  status: "completed" | "skipped";
+  exercises: WorkoutExercise[];
+  cardio?: CardioBlock;
+  notes?: string;
+  estimatedKcal?: number;
+  source: "manual" | "chat";
+  chat?: ChatMessage[];
+}
+
+export interface GymPlan {
+  daysPerWeek: number;
+  template: SplitTag[];
+  notes?: string;
+}
+
+export const DEFAULT_GYM_PLAN: GymPlan = {
+  daysPerWeek: 5,
+  template: ["push", "pull", "legs", "upper", "lower"],
+  notes: "",
+};
+
+export const SPLIT_LABELS: Record<SplitTag, string> = {
+  push: "Push",
+  pull: "Pull",
+  legs: "Legs",
+  upper: "Upper",
+  lower: "Lower",
+  full: "Full body",
+  cardio: "Cardio",
+  other: "Other",
+};

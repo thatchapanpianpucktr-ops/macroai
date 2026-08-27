@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 // Newest first. Bump `build` whenever you want the popup to show again.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    build: 14,
+    version: "1.13",
+    date: "2026-08-27",
+    title: "Gym coach + workout log",
+    items: [
+      "New Gym tab: chat with a coach that reads your plan and workout history.",
+      "Log finished sessions from chat — it asks for weight/reps (or reps-only for dips & bodyweight moves) and optional cardio.",
+      "Skip a day? Ask how to get back on track. Estimated burn for today includes workouts + manual steps.",
+    ],
+  },
+  {
     build: 13,
     version: "1.12",
     date: "2026-08-13",

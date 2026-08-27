@@ -1,5 +1,5 @@
-const CACHE = "macroai-v9";
-const APP_SHELL = ["/", "/weight", "/trends", "/settings", "/manifest.webmanifest"];
+const CACHE = "macroai-v10";
+const APP_SHELL = ["/", "/weight", "/trends", "/gym", "/settings", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

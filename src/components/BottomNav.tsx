@@ -10,7 +10,16 @@ const items = [
     label: "Trends",
     icon: "M4 19V5m0 14h16M7 15l4-5 3 3 5-7",
   },
-  { href: "/weight", label: "Weight", icon: "M4 7h16l-2 13H6L4 7zm4 0V5a4 4 0 018 0v2" },
+  {
+    href: "/gym",
+    label: "Gym",
+    icon: "M6.5 6.5l-2 2M17.5 6.5l2 2M4 12h16M7 12v6m10-6v6M9 18h6",
+  },
+  {
+    href: "/weight",
+    label: "Weight",
+    icon: "M4 7h16l-2 13H6L4 7zm4 0V5a4 4 0 018 0v2",
+  },
   {
     href: "/settings",
     label: "Settings",
@@ -22,7 +31,7 @@ export function BottomNav() {
   const path = usePathname();
   return (
     <nav className="fixed bottom-0 inset-x-0 z-40 border-t border-[var(--border)] bg-[var(--surface)]/95 backdrop-blur">
-      <div className="mx-auto max-w-md grid grid-cols-4 px-2 pt-1.5 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+      <div className="mx-auto max-w-md grid grid-cols-5 px-1 pt-1.5 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
         {items.map((it) => {
           const active = path === it.href;
           return (
@@ -32,7 +41,7 @@ export function BottomNav() {
               className="flex flex-col items-center gap-1 py-1.5"
               style={{ color: active ? "var(--accent)" : "var(--muted)" }}
             >
-              <svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+              <svg width={20} height={20} viewBox="0 0 24 24" fill="none">
                 <path
                   d={it.icon}
                   stroke="currentColor"

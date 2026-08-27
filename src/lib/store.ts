@@ -2,10 +2,14 @@
 
 import { useSyncExternalStore, useCallback } from "react";
 import {
+  DEFAULT_GYM_PLAN,
   DEFAULT_SETTINGS,
+  type ChatMessage,
   type FoodEntry,
+  type GymPlan,
   type Settings,
   type WeightEntry,
+  type WorkoutSession,
 } from "./types";
 import { defaultMeal } from "./meal";
 
@@ -14,12 +18,18 @@ const KEYS = {
   foods: "macroai.foods.v1",
   weights: "macroai.weights.v1",
   water: "macroai.water.v1",
+  workouts: "macroai.workouts.v1",
+  gymPlan: "macroai.gymPlan.v1",
+  gymChat: "macroai.gymChat.v1",
+  steps: "macroai.steps.v1",
   // Intentionally NOT included in export/import backups (a secret).
   geminiKey: "macroai.geminiKey.v1",
 } as const;
 
 /** map of YYYY-MM-DD -> number of glasses */
 type WaterMap = Record<string, number>;
+/** map of YYYY-MM-DD -> step count */
+type StepsMap = Record<string, number>;
 
 type Key = keyof typeof KEYS;
 
@@ -325,6 +335,127 @@ export function useWater(date: string): {
   return { glasses, setGlasses };
 }
 
+// ---- Workouts ----------------------------------------------------------
+
+function newId() {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
+}
+
+export function useWorkouts(): {
+  workouts: WorkoutSession[];
+  add: (w: Omit<WorkoutSession, "id" | "createdAt">) => WorkoutSession;
+  remove: (id: string) => void;
+  update: (
+    id: string,
+    patch: Partial<Omit<WorkoutSession, "id" | "createdAt">>,
+  ) => void;
+} {
+  const json = useSyncExternalStore(
+    subscribe,
+    () => JSON.stringify(read<WorkoutSession[]>("workouts", [])),
+    () => "[]",
+  );
+  const workouts = JSON.parse(json) as WorkoutSession[];
+
+  const add = useCallback((w: Omit<WorkoutSession, "id" | "createdAt">) => {
+    const list = read<WorkoutSession[]>("workouts", []);
+    const entry: WorkoutSession = {
+      ...w,
+      id: newId(),
+      createdAt: new Date().toISOString(),
+    };
+    write("workouts", [entry, ...list]);
+    return entry;
+  }, []);
+
+  const remove = useCallback((id: string) => {
+    const list = read<WorkoutSession[]>("workouts", []);
+    write(
+      "workouts",
+      list.filter((w) => w.id !== id),
+    );
+  }, []);
+
+  const update = useCallback(
+    (
+      id: string,
+      patch: Partial<Omit<WorkoutSession, "id" | "createdAt">>,
+    ) => {
+      const list = read<WorkoutSession[]>("workouts", []);
+      write(
+        "workouts",
+        list.map((w) => (w.id === id ? { ...w, ...patch } : w)),
+      );
+    },
+    [],
+  );
+
+  return { workouts, add, remove, update };
+}
+
+export function useGymPlan(): [GymPlan, (patch: Partial<GymPlan>) => void] {
+  const json = useSyncExternalStore(
+    subscribe,
+    () => {
+      const p = read<GymPlan>("gymPlan", DEFAULT_GYM_PLAN);
+      return JSON.stringify({ ...DEFAULT_GYM_PLAN, ...p });
+    },
+    () => JSON.stringify(DEFAULT_GYM_PLAN),
+  );
+  const plan = JSON.parse(json) as GymPlan;
+  const update = useCallback((patch: Partial<GymPlan>) => {
+    const current = read<GymPlan>("gymPlan", DEFAULT_GYM_PLAN);
+    write("gymPlan", { ...DEFAULT_GYM_PLAN, ...current, ...patch });
+  }, []);
+  return [plan, update];
+}
+
+export function useGymChat(): {
+  messages: ChatMessage[];
+  setMessages: (msgs: ChatMessage[]) => void;
+  clear: () => void;
+} {
+  const json = useSyncExternalStore(
+    subscribe,
+    () => JSON.stringify(read<ChatMessage[]>("gymChat", [])),
+    () => "[]",
+  );
+  const messages = JSON.parse(json) as ChatMessage[];
+  const setMessages = useCallback((msgs: ChatMessage[]) => {
+    write("gymChat", msgs.slice(-80));
+  }, []);
+  const clear = useCallback(() => write("gymChat", []), []);
+  return { messages, setMessages, clear };
+}
+
+export function useSteps(date: string): {
+  steps: number;
+  setSteps: (n: number) => void;
+} {
+  const json = useSyncExternalStore(
+    subscribe,
+    () => JSON.stringify(read<StepsMap>("steps", {})),
+    () => "{}",
+  );
+  const map = JSON.parse(json) as StepsMap;
+  const steps = map[date] ?? 0;
+
+  const setSteps = useCallback(
+    (n: number) => {
+      const current = read<StepsMap>("steps", {});
+      const next = Math.max(0, Math.round(n));
+      if (next === 0) delete current[date];
+      else current[date] = next;
+      write("steps", current);
+    },
+    [date],
+  );
+
+  return { steps, setSteps };
+}
+
 // ---- Gemini API key (per-device, never exported) -----------------------
 
 export function useApiKey(): [string, (k: string) => void] {
@@ -346,6 +477,9 @@ export function exportAll() {
     foods: read<FoodEntry[]>("foods", []),
     weights: read<WeightEntry[]>("weights", []),
     water: read<WaterMap>("water", {}),
+    workouts: read<WorkoutSession[]>("workouts", []),
+    gymPlan: read<GymPlan>("gymPlan", DEFAULT_GYM_PLAN),
+    steps: read<StepsMap>("steps", {}),
   };
 }
 
@@ -354,26 +488,36 @@ export type BackupShape = {
   foods?: FoodEntry[];
   weights?: WeightEntry[];
   water?: WaterMap;
+  workouts?: WorkoutSession[];
+  gymPlan?: Partial<GymPlan>;
+  steps?: StepsMap;
 };
 
 /**
  * Restore data from a backup object. `mode` "replace" overwrites everything;
- * "merge" keeps existing food/weight entries and adds non-duplicate ones.
+ * "merge" keeps existing food/weight/workout entries and adds non-duplicate ones.
  * Returns a small summary for the UI.
  */
 export function importAll(
   data: BackupShape,
   mode: "replace" | "merge" = "replace",
-): { foods: number; weights: number } {
-  if (typeof window === "undefined") return { foods: 0, weights: 0 };
+): { foods: number; weights: number; workouts: number } {
+  if (typeof window === "undefined")
+    return { foods: 0, weights: 0, workouts: 0 };
   if (!data || typeof data !== "object") throw new Error("Invalid backup file");
 
   const incomingFoods = Array.isArray(data.foods) ? data.foods : [];
   const incomingWeights = Array.isArray(data.weights) ? data.weights : [];
+  const incomingWorkouts = Array.isArray(data.workouts) ? data.workouts : [];
 
   if (data.settings && typeof data.settings === "object") {
     const current = read<Settings>("settings", DEFAULT_SETTINGS);
     write("settings", { ...DEFAULT_SETTINGS, ...current, ...data.settings });
+  }
+
+  if (data.gymPlan && typeof data.gymPlan === "object") {
+    const current = read<GymPlan>("gymPlan", DEFAULT_GYM_PLAN);
+    write("gymPlan", { ...DEFAULT_GYM_PLAN, ...current, ...data.gymPlan });
   }
 
   if (data.water && typeof data.water === "object") {
@@ -384,10 +528,23 @@ export function importAll(
     }
   }
 
+  if (data.steps && typeof data.steps === "object") {
+    if (mode === "replace") {
+      write("steps", data.steps);
+    } else {
+      write("steps", { ...read<StepsMap>("steps", {}), ...data.steps });
+    }
+  }
+
   if (mode === "replace") {
     write("foods", incomingFoods);
     write("weights", incomingWeights);
-    return { foods: incomingFoods.length, weights: incomingWeights.length };
+    write("workouts", incomingWorkouts);
+    return {
+      foods: incomingFoods.length,
+      weights: incomingWeights.length,
+      workouts: incomingWorkouts.length,
+    };
   }
 
   // merge
@@ -400,7 +557,18 @@ export function importAll(
   const weightDates = new Map(curWeights.map((w) => [w.date, w]));
   for (const w of incomingWeights) if (w?.date) weightDates.set(w.date, w);
 
+  const curWorkouts = read<WorkoutSession[]>("workouts", []);
+  const workoutIds = new Set(curWorkouts.map((w) => w.id));
+  const mergedWorkouts = [...curWorkouts];
+  for (const w of incomingWorkouts)
+    if (w?.id && !workoutIds.has(w.id)) mergedWorkouts.push(w);
+
   write("foods", mergedFoods);
   write("weights", Array.from(weightDates.values()));
-  return { foods: mergedFoods.length, weights: weightDates.size };
+  write("workouts", mergedWorkouts);
+  return {
+    foods: mergedFoods.length,
+    weights: weightDates.size,
+    workouts: mergedWorkouts.length,
+  };
 }

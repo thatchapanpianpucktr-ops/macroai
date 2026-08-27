@@ -4,6 +4,22 @@ Ideas and features parked for later. Pick one up when ready.
 
 ---
 
+## Gym reminders + calendar sync
+
+**What**: Remind the user of planned gym days and keep the split on their phone calendar.
+
+**Reminders**
+- Local notification when a session is planned for today
+- Optional evening nudge if no completed/skipped log
+- iOS PWAs have limited notification support — may need a native shell (Capacitor) later
+
+**Calendar**
+- Export planned week as `.ics` for Google/Apple Calendar import
+- Later: Google Calendar OAuth to create/update events; refresh when coach adapts after a skip
+- `GymPlan.daysPerWeek` + `template` already support generating dated planned slots
+
+---
+
 ## 🖼️ Keep photo with logged food entry (viewable after saving)
 
 **What**: After scanning a photo, the image is currently discarded. We want users to be able to tap a logged food entry and see the original photo.

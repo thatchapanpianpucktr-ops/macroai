@@ -82,7 +82,7 @@ export default function SettingsPage() {
       );
       const res = importAll(data, replace ? "replace" : "merge");
       setBackupMsg(
-        `Restored — ${res.foods} food entries, ${res.weights} weigh-ins.`,
+        `Restored — ${res.foods} food entries, ${res.weights} weigh-ins, ${res.workouts} workouts.`,
       );
     } catch {
       setBackupMsg("Couldn't read that file — is it a MacroAI backup?");
