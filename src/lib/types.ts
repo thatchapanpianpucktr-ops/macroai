@@ -68,6 +68,18 @@ export interface FoodEntry {
   thumb?: string;
   /** saved AI discussion about this item, if any */
   chat?: ChatMessage[];
+  /** per-item breakdown when logged as one combined entry */
+  items?: FoodSubItem[];
+}
+
+/** One line in a combined meal (e.g. rice, chicken, veg). */
+export interface FoodSubItem {
+  name: string;
+  grams: number;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
 }
 
 export interface MacroTargets {

@@ -7,7 +7,18 @@ import { openApiKeyPrompt } from "@/lib/apikey-prompt";
 import { saveDraft, clearDraft, loadDraft } from "@/lib/draft";
 import { NumberInput } from "@/components/NumberInput";
 import { ChatPanel, type ChatItem } from "@/components/ChatPanel";
-import type { AnalyzedItem, AnalyzeResponse, ChatMessage } from "@/lib/types";
+import type { AnalyzedItem, AnalyzeResponse, ChatMessage, FoodSubItem } from "@/lib/types";
+
+function toSubItem(it: DraftItem): FoodSubItem {
+  return {
+    name: it.name,
+    grams: it.grams,
+    calories: it.calories,
+    protein: it.protein,
+    carbs: it.carbs,
+    fat: it.fat,
+  };
+}
 
 const CONF_BG: Record<string, string> = {
   high: "rgba(52,211,153,0.18)",
@@ -377,6 +388,7 @@ export function FoodScanner({
         source: "ai",
         thumb: cover ?? undefined,
         chat: chatMessages.length ? chatMessages : undefined,
+        items: included.map(toSubItem),
       });
       setOpen(false);
       reset();
@@ -428,6 +440,7 @@ export function FoodScanner({
         source: "ai",
         thumb: cover ?? undefined,
         chat: chatMessages.length ? chatMessages : undefined,
+        items: list.map(toSubItem),
       });
     }
 

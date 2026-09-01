@@ -259,6 +259,9 @@ function FoodRow({ f, onClick }: { f: FoodEntry; onClick: () => void }) {
       <div className="flex-1 min-w-0">
         <div className="font-medium truncate">{f.name}</div>
         <div className="text-xs text-[var(--muted)]">
+          {f.items && f.items.length > 1
+            ? `${f.items.length} parts · `
+            : ""}
           {f.grams ? `${f.grams} g · ` : ""}P {f.protein} · C {f.carbs} · F {f.fat}
         </div>
       </div>

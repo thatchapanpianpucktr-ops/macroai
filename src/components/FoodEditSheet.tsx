@@ -7,7 +7,14 @@ import { downscale } from "@/lib/image";
 import { useApiKey, useSettings } from "@/lib/store";
 import { openApiKeyPrompt } from "@/lib/apikey-prompt";
 import { ChatPanel, type ChatItem } from "@/components/ChatPanel";
-import type { ChatMessage, FoodEntry, Meal } from "@/lib/types";
+import {
+  chatItemsToSubItems,
+  entryToSubItems,
+  scaleFoodItems,
+  subItemsToChatItems,
+  sumFoodItems,
+} from "@/lib/food-items";
+import type { ChatMessage, FoodEntry, FoodSubItem, Meal } from "@/lib/types";
 
 type Draft = {
   name: string;
@@ -59,24 +66,39 @@ export function FoodEditSheet({
   const [portionMsg, setPortionMsg] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [subItems, setSubItems] = useState<FoodSubItem[]>([]);
+  const [showBreakdown, setShowBreakdown] = useState(true);
 
   useEffect(() => {
     if (entry) {
+      const items = entryToSubItems(entry);
+      const totals =
+        entry.items && entry.items.length > 1
+          ? sumFoodItems(items)
+          : {
+              grams: entry.grams ?? 0,
+              calories: entry.calories,
+              protein: entry.protein,
+              carbs: entry.carbs,
+              fat: entry.fat,
+            };
+      setSubItems(items);
+      setShowBreakdown((entry.items?.length ?? 0) > 1);
       setDraft({
         name: entry.name,
-        grams: entry.grams ?? 0,
-        calories: entry.calories,
-        protein: entry.protein,
-        carbs: entry.carbs,
-        fat: entry.fat,
+        grams: totals.grams,
+        calories: totals.calories,
+        protein: totals.protein,
+        carbs: totals.carbs,
+        fat: totals.fat,
         meal: entry.meal ?? "snack",
       });
       setBase({
-        grams: entry.grams ?? 0,
-        calories: entry.calories,
-        protein: entry.protein,
-        carbs: entry.carbs,
-        fat: entry.fat,
+        grams: totals.grams,
+        calories: totals.calories,
+        protein: totals.protein,
+        carbs: totals.carbs,
+        fat: totals.fat,
       });
       setFraction(1);
       setNote("");
@@ -87,16 +109,42 @@ export function FoodEditSheet({
     } else {
       setDraft(null);
       setBase(null);
+      setSubItems([]);
     }
   }, [entry]);
 
   if (!entry || !draft || !base) return null;
 
+  const hasBreakdown = subItems.length > 1;
+  const chatKind = hasBreakdown ? "scan" : "item";
+
   const r1 = (n: number) => Math.round(n * 10) / 10;
+
+  function applyTotalsFromSubItems(items: FoodSubItem[]) {
+    const totals = sumFoodItems(items);
+    setSubItems(items);
+    setDraft((d) =>
+      d
+        ? {
+            ...d,
+            grams: totals.grams,
+            calories: totals.calories,
+            protein: totals.protein,
+            carbs: totals.carbs,
+            fat: totals.fat,
+          }
+        : d,
+    );
+  }
 
   function applyFraction(f: number) {
     if (!base) return;
     setFraction(f);
+    if (hasBreakdown) {
+      const scaled = scaleFoodItems(subItems, f);
+      applyTotalsFromSubItems(scaled);
+      return;
+    }
     setDraft((d) =>
       d
         ? {
@@ -184,10 +232,25 @@ export function FoodEditSheet({
     setDraft((d) => (d ? { ...d, [key]: value } : d));
   }
 
-  /** Live-apply the AI's revised numbers (from chat) to the draft. */
+  /** Live-apply the AI's revised numbers (from chat) to sub-items or single item. */
   function applyChatItems(next: ChatItem[]) {
+    if (next.length === 0) return;
+    if (hasBreakdown || next.length > 1) {
+      applyTotalsFromSubItems(chatItemsToSubItems(next));
+      setShowBreakdown(true);
+      return;
+    }
     const it = next[0];
-    if (!it) return;
+    setSubItems([
+      {
+        name: it.name,
+        grams: Math.round(it.grams),
+        calories: Math.round(it.calories),
+        protein: r1(it.protein),
+        carbs: r1(it.carbs),
+        fat: r1(it.fat),
+      },
+    ]);
     setDraft((d) =>
       d
         ? {
@@ -203,8 +266,29 @@ export function FoodEditSheet({
     );
   }
 
+  function updateSubItem(
+    index: number,
+    patch: Partial<FoodSubItem>,
+  ) {
+    const next = subItems.map((it, i) =>
+      i === index ? { ...it, ...patch } : it,
+    );
+    applyTotalsFromSubItems(next);
+  }
+
   function save() {
     if (!entry || !draft) return;
+    const storedItems =
+      subItems.length > 1
+        ? subItems.map((it) => ({
+            ...it,
+            name: it.name.trim() || "Item",
+            calories: Math.max(0, Math.round(it.calories)),
+            protein: Math.max(0, it.protein),
+            carbs: Math.max(0, it.carbs),
+            fat: Math.max(0, it.fat),
+          }))
+        : undefined;
     onSave(entry.id, {
       name: draft.name.trim() || "Food",
       grams: draft.grams || undefined,
@@ -214,6 +298,7 @@ export function FoodEditSheet({
       fat: Math.max(0, draft.fat),
       meal: draft.meal,
       chat: chatMessages.length ? chatMessages : undefined,
+      items: storedItems,
     });
     onClose();
   }
@@ -265,12 +350,26 @@ export function FoodEditSheet({
           <EditField
             label="grams"
             value={draft.grams}
-            onChange={(v) => set("grams", v)}
+            onChange={(v) => {
+              if (hasBreakdown && base.grams > 0) {
+                applyTotalsFromSubItems(scaleFoodItems(subItems, v / base.grams));
+              } else {
+                set("grams", v);
+              }
+            }}
           />
           <EditField
             label="kcal"
             value={draft.calories}
-            onChange={(v) => set("calories", v)}
+            onChange={(v) => {
+              if (hasBreakdown && base.calories > 0) {
+                applyTotalsFromSubItems(
+                  scaleFoodItems(subItems, v / base.calories),
+                );
+              } else {
+                set("calories", v);
+              }
+            }}
           />
           <EditField
             label="P"
@@ -288,6 +387,85 @@ export function FoodEditSheet({
             onChange={(v) => set("fat", v)}
           />
         </div>
+
+        {hasBreakdown && (
+          <div className="mt-4 rounded-xl bg-[var(--surface-2)] p-3 space-y-2">
+            <button
+              type="button"
+              className="flex items-center justify-between w-full text-xs font-semibold"
+              onClick={() => setShowBreakdown((v) => !v)}
+            >
+              <span>
+                {subItems.length} parts · {draft.calories} kcal total
+              </span>
+              <span className="text-[var(--muted)]">
+                {showBreakdown ? "Hide" : "Show"}
+              </span>
+            </button>
+            {showBreakdown && (
+              <div className="space-y-2 pt-1">
+                {subItems.map((it, i) => (
+                  <div
+                    key={i}
+                    className="rounded-lg bg-[var(--surface)] p-2.5 space-y-1.5"
+                  >
+                    <input
+                      className="input py-1.5 text-sm font-medium"
+                      value={it.name}
+                      onChange={(e) =>
+                        updateSubItem(i, { name: e.target.value })
+                      }
+                    />
+                    <div className="grid grid-cols-5 gap-1 text-center">
+                      <label className="block">
+                        <span className="text-[9px] text-[var(--muted)]">g</span>
+                        <NumberInput
+                          className="input py-1 text-xs text-center"
+                          value={it.grams}
+                          onChange={(v) => updateSubItem(i, { grams: v })}
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-[9px] text-[var(--muted)]">
+                          kcal
+                        </span>
+                        <NumberInput
+                          className="input py-1 text-xs text-center"
+                          value={it.calories}
+                          onChange={(v) => updateSubItem(i, { calories: v })}
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-[9px] text-[var(--muted)]">P</span>
+                        <NumberInput
+                          className="input py-1 text-xs text-center"
+                          value={it.protein}
+                          onChange={(v) => updateSubItem(i, { protein: v })}
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-[9px] text-[var(--muted)]">C</span>
+                        <NumberInput
+                          className="input py-1 text-xs text-center"
+                          value={it.carbs}
+                          onChange={(v) => updateSubItem(i, { carbs: v })}
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-[9px] text-[var(--muted)]">F</span>
+                        <NumberInput
+                          className="input py-1 text-xs text-center"
+                          value={it.fat}
+                          onChange={(v) => updateSubItem(i, { fat: v })}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="mt-4 rounded-xl bg-[var(--surface-2)] p-3">
           <div className="text-xs font-semibold mb-2">
@@ -398,19 +576,10 @@ export function FoodEditSheet({
       <ChatPanel
         open={chatOpen}
         onClose={() => setChatOpen(false)}
-        title={`Discuss: ${draft.name}`}
-        kind="item"
+        title={hasBreakdown ? `Discuss: ${draft.name}` : `Discuss: ${draft.name}`}
+        kind={chatKind}
         allowPhoto
-        items={[
-          {
-            name: draft.name,
-            grams: draft.grams,
-            calories: draft.calories,
-            protein: draft.protein,
-            carbs: draft.carbs,
-            fat: draft.fat,
-          },
-        ]}
+        items={subItemsToChatItems(subItems)}
         messages={chatMessages}
         onMessagesChange={setChatMessages}
         onApplyItems={applyChatItems}

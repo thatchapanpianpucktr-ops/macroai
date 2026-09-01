@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 // Newest first. Bump `build` whenever you want the popup to show again.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    build: 15,
+    version: "1.14",
+    date: "2026-09-01",
+    title: "See meal parts after logging",
+    items: [
+      "Combined meals now keep each sub-item (rice, chicken, etc.) when you log as one entry.",
+      "Tap a logged meal to expand the breakdown — same detail as the scan review step.",
+      "Chat with AI to fix calories on combined meals; it updates each part and the total.",
+    ],
+  },
+  {
     build: 14,
     version: "1.13",
     date: "2026-08-27",
