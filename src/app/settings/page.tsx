@@ -37,6 +37,11 @@ export default function SettingsPage() {
   );
 
   const weight = useMemo(() => currentWeight(weights), [weights]);
+  const hasStartWeight = useMemo(() => {
+    if (weight != null && weight > 0) return true;
+    const parsed = parseFloat(startWeight.replace(",", "."));
+    return Number.isFinite(parsed) && parsed > 0;
+  }, [weight, startWeight]);
   const tdee = useMemo(
     () => estimateTDEE(settings, weights, foods),
     [settings, weights, foods],
@@ -52,8 +57,9 @@ export default function SettingsPage() {
   const [showKey, setShowKey] = useState(false);
 
   function finishOnboarding() {
-    const w = parseFloat(startWeight);
-    if (w && !weight) setWeight(todayYmd(settings.timeZone), w);
+    const parsed = parseFloat(startWeight.replace(",", "."));
+    const w = weight ?? (Number.isFinite(parsed) && parsed > 0 ? parsed : 0);
+    if (w > 0 && !weight) setWeight(todayYmd(settings.timeZone), w);
     update({ onboarded: true });
     router.push("/");
   }
@@ -161,19 +167,30 @@ export default function SettingsPage() {
             />
           </Labeled>
           <Labeled label={weight ? "Current weight (kg)" : "Start weight (kg)"}>
-            <input
-              type="number"
-              inputMode="decimal"
-              className="input"
-              value={weight ?? startWeight}
-              onChange={(e) => {
-                setStartWeight(e.target.value);
-                if (weight) {
-                  const v = parseFloat(e.target.value);
-                  if (v) setWeight(todayYmd(), v);
-                }
-              }}
-            />
+            {weight ? (
+              <NumberInput
+                className="input"
+                value={weight}
+                onChange={(v) => {
+                  if (v > 0) setWeight(todayYmd(settings.timeZone), v);
+                }}
+                selectOnFocus
+              />
+            ) : (
+              <input
+                type="text"
+                inputMode="decimal"
+                className="input"
+                placeholder="e.g. 70"
+                value={startWeight}
+                onChange={(e) => setStartWeight(e.target.value)}
+              />
+            )}
+            {!weight && !hasStartWeight && (
+              <p className="text-[11px] text-[var(--warn)] mt-1">
+                Required — enter your weight to start tracking.
+              </p>
+            )}
           </Labeled>
         </div>
 
@@ -506,13 +523,28 @@ export default function SettingsPage() {
       )}
 
       {!settings.onboarded ? (
-        <button
-          className="btn btn-primary w-full py-3 disabled:opacity-50"
-          disabled={!startWeight && !weight}
-          onClick={finishOnboarding}
-        >
-          Start tracking
-        </button>
+        <>
+          <div className="h-16" aria-hidden />
+          <div
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
+          >
+            <div className="card p-3 border border-[var(--border)] shadow-lg">
+              {!hasStartWeight && (
+                <p className="text-xs text-center text-[var(--warn)] mb-2">
+                  Enter your start weight above (e.g. 70), then tap here.
+                </p>
+              )}
+              <button
+                type="button"
+                className="btn btn-primary w-full py-3.5 text-base disabled:opacity-40"
+                disabled={!hasStartWeight}
+                onClick={() => finishOnboarding()}
+              >
+                {hasStartWeight ? "Start tracking" : "Add start weight first"}
+              </button>
+            </div>
+          </div>
+        </>
       ) : (
         <p className="text-center text-xs text-[var(--muted)]">
           Changes save automatically.

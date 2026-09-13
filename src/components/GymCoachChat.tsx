@@ -14,12 +14,34 @@ import { openApiKeyPrompt } from "@/lib/apikey-prompt";
 import {
   buildExerciseMemory,
   compactWorkoutHistory,
+  estimateCardioKcalLocal,
   estimateWorkoutKcalLocal,
+  extractSplit,
   normalizeSplit,
 } from "@/lib/gym";
+import {
+  collapseDuplicateExercises,
+  formatCardio,
+  formatParsedSet,
+  isNameOnlyWorkoutList,
+  mergeCardio,
+  mergeSetsIntoExercises,
+  lastSetContext,
+  parseCardio,
+  parseWorkoutLog,
+  resolveCoachSets,
+  summarizeSessionExercises,
+  type ParsedSetLine,
+} from "@/lib/parse-set";
 import { currentWeight } from "@/lib/tdee";
 import { todayYmd } from "@/lib/date";
-import type { ChatMessage, SplitTag, WorkoutExercise } from "@/lib/types";
+import type {
+  CardioBlock,
+  ChatMessage,
+  SplitTag,
+  WorkoutExercise,
+} from "@/lib/types";
+import { SPLIT_LABELS } from "@/lib/types";
 import {
   GymLogPromptSheet,
   type DraftExerciseIn,
@@ -32,6 +54,14 @@ type CoachResponse = {
   skippedSplit?: string | null;
   suggestedSplit?: string | null;
   draftExercises?: DraftExerciseIn[];
+  loggedSets?: {
+    name: string;
+    loadMode?: string;
+    reps: number;
+    weightKg?: number;
+    setIndex?: number;
+  }[];
+  loggedCardio?: CardioBlock | null;
   estimatedKcal?: number;
   openLogPrompt?: boolean;
   error?: string;
@@ -44,14 +74,18 @@ const CHIPS = [
     text: "I skipped my last planned gym day. What should I do today to get back on track?",
   },
   {
+    label: "Log a set",
+    text: "deadlift 100kg 5 reps set 1",
+  },
+  {
+    label: "Log cardio",
+    text: "incline walk 12.5% 3.5km/h 30min",
+  },
+  {
     label: "Log finished workout",
     text: "Done with my workout. I did: ",
   },
   { label: "Progress check", text: "How am I progressing lately? What should I improve?" },
-  {
-    label: "Add cardio advice",
-    text: "Should I add cardio today, and what kind fits my plan?",
-  },
 ];
 
 export function GymCoachChat({
@@ -62,7 +96,7 @@ export function GymCoachChat({
   const [apiKey] = useApiKey();
   const [settings] = useSettings();
   const [plan] = useGymPlan();
-  const { workouts, add } = useWorkouts();
+  const { workouts, add, update } = useWorkouts();
   const { weights } = useWeights();
   const tz = settings.timeZone;
   const today = todayYmd(tz);
@@ -77,13 +111,132 @@ export function GymCoachChat({
   const [logOpen, setLogOpen] = useState(false);
   const [logSplit, setLogSplit] = useState<SplitTag>("other");
   const [logDrafts, setLogDrafts] = useState<DraftExerciseIn[]>([]);
+  const plannedSplitRef = useRef<SplitTag | null>(null);
 
   const memory = useMemo(() => buildExerciseMemory(workouts), [workouts]);
   const bodyweightKg = currentWeight(weights) ?? 75;
+  const todaySession = useMemo(
+    () =>
+      workouts.find((w) => w.date === today && w.status === "completed") ??
+      null,
+    [workouts, today],
+  );
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  function splitFromChat(chat: ChatMessage[]): SplitTag | null {
+    for (let i = chat.length - 1; i >= 0; i--) {
+      if (chat[i].role !== "user") continue;
+      const found = extractSplit(chat[i].content);
+      if (found) return found;
+    }
+    return plannedSplitRef.current;
+  }
+
+  function resolveSplit(
+    hint?: string | null,
+    chat: ChatMessage[] = messages,
+  ): SplitTag {
+    const fromHint = hint ? extractSplit(String(hint)) : null;
+    return (
+      plannedSplitRef.current ??
+      splitFromChat(chat) ??
+      fromHint ??
+      todaySession?.split ??
+      plan.template[0] ??
+      "other"
+    );
+  }
+
+  function persistWorkout(opts: {
+    lines?: ParsedSetLine[];
+    cardio?: CardioBlock | null;
+    splitHint?: string | null;
+    chat?: ChatMessage[];
+  }): { exercises: WorkoutExercise[]; cardio?: CardioBlock } {
+    const exercises = opts.lines?.length
+      ? mergeSetsIntoExercises(todaySession?.exercises ?? [], opts.lines)
+      : collapseDuplicateExercises(todaySession?.exercises ?? []);
+    const cardioMerged = mergeCardio(
+      todaySession?.cardio,
+      opts.cardio ?? undefined,
+    );
+    const cardio = cardioMerged
+      ? {
+          ...cardioMerged,
+          estimatedKcal: estimateCardioKcalLocal(cardioMerged, bodyweightKg),
+        }
+      : undefined;
+    const split = resolveSplit(opts.splitHint, opts.chat);
+    const estimatedKcal = estimateWorkoutKcalLocal(
+      { exercises, cardio, status: "completed" },
+      bodyweightKg,
+    );
+    const patch = {
+      exercises,
+      cardio,
+      split,
+      estimatedKcal,
+      status: "completed" as const,
+    };
+    if (todaySession) {
+      update(todaySession.id, patch);
+    } else if (
+      exercises.length > 0 ||
+      cardio ||
+      plannedSplitRef.current ||
+      opts.splitHint
+    ) {
+      add({
+        date: today,
+        ...patch,
+        source: "chat",
+      });
+    }
+    onSessionSaved?.();
+    return { exercises, cardio };
+  }
+
+  useEffect(() => {
+    if (!todaySession) return;
+    const fromChat = splitFromChat(messages);
+    if (fromChat) plannedSplitRef.current = fromChat;
+    const exercises = collapseDuplicateExercises(todaySession.exercises ?? []);
+    const namesDirty =
+      exercises.length !== (todaySession.exercises?.length ?? 0) ||
+      exercises.some(
+        (ex, i) =>
+          ex.name !== todaySession.exercises[i]?.name ||
+          ex.sets.length !== todaySession.exercises[i]?.sets.length,
+      );
+    const splitDirty = Boolean(fromChat && fromChat !== todaySession.split);
+    if (!namesDirty && !splitDirty) return;
+    const estimatedKcal = estimateWorkoutKcalLocal(
+      {
+        exercises,
+        cardio: todaySession.cardio,
+        status: todaySession.status,
+      },
+      bodyweightKg,
+    );
+    update(todaySession.id, {
+      exercises,
+      ...(fromChat ? { split: fromChat } : {}),
+      estimatedKcal,
+    });
+  }, [todaySession, messages, bodyweightKg, update]);
+
+  function linesFromCoach(
+    sets: NonNullable<CoachResponse["loggedSets"]>,
+  ): ParsedSetLine[] {
+    return resolveCoachSets(
+      sets,
+      todaySession?.exercises ?? [],
+      lastSetContext(todaySession?.exercises ?? []),
+    );
+  }
 
   async function callCoach(
     nextMessages: ChatMessage[],
@@ -108,6 +261,8 @@ export function GymCoachChat({
           history: compactWorkoutHistory(workouts, 30),
           exerciseMemory: memory,
           stepsToday: steps,
+          sessionDraft: todaySession,
+          lastSet: lastSetContext(todaySession?.exercises ?? []),
           ...extraContext,
         },
       }),
@@ -120,10 +275,6 @@ export function GymCoachChat({
   async function send(text: string, action = "chat") {
     const trimmed = text.trim();
     if (!trimmed || loading) return;
-    if (!apiKey) {
-      openApiKeyPrompt();
-      return;
-    }
 
     const userMsg: ChatMessage = {
       role: "user",
@@ -136,15 +287,69 @@ export function GymCoachChat({
     setLoading(true);
     setError(null);
 
-    try {
-      const data = await callCoach(next, action);
-      const assistant: ChatMessage = {
-        role: "assistant",
-        content: data.reply || "Okay.",
-        at: new Date().toISOString(),
-      };
-      setMessages([...next, assistant]);
+    const namedSplit = extractSplit(trimmed);
+    if (namedSplit) plannedSplitRef.current = namedSplit;
+    const cardio = parseCardio(trimmed);
+    const lastLift = lastSetContext(todaySession?.exercises ?? []);
+    const localSets = parseWorkoutLog(trimmed, memory, lastLift);
+    const looksLikeLog =
+      localSets.length > 0 ||
+      Boolean(cardio) ||
+      /\d/.test(trimmed) ||
+      /\b(set|reps?|kg|same|next set|another set)\b/i.test(trimmed) ||
+      /done|logged|i did|finished/i.test(trimmed);
 
+    function confirmLocal(lines: ParsedSetLine[]) {
+      const saved = persistWorkout({
+        lines,
+        cardio,
+        splitHint: namedSplit,
+        chat: next,
+      });
+      const cardioLine = saved.cardio
+        ? `\nCardio — ${formatCardio(saved.cardio)}`
+        : "";
+      setMessages([
+        ...next,
+        {
+          role: "assistant",
+          content: `Logged:\n${(lines.length
+            ? lines
+            : []
+          )
+            .map(formatParsedSet)
+            .join("\n")}${
+            lines.length === 0 && saved.cardio
+              ? formatCardio(saved.cardio)
+              : ""
+          }\n\nToday so far · ${SPLIT_LABELS[resolveSplit(namedSplit, next)]}:\n${summarizeSessionExercises(saved.exercises)}${cardioLine}`,
+          at: new Date().toISOString(),
+        },
+      ]);
+    }
+
+    if (!apiKey) {
+      if (localSets.length > 0 || cardio || namedSplit) {
+        confirmLocal(localSets);
+        setLoading(false);
+        return;
+      }
+      setLoading(false);
+      if (looksLikeLog) {
+        setError(
+          "Add a Gemini API key in Settings so the coach can read what you logged.",
+        );
+        return;
+      }
+      openApiKeyPrompt();
+      return;
+    }
+
+    try {
+      const data = await callCoach(
+        next,
+        action === "chat" && looksLikeLog ? "log_set" : action,
+      );
       if (data.markSkipped) {
         const split = normalizeSplit(data.skippedSplit ?? "other");
         const already = workouts.some(
@@ -161,13 +366,50 @@ export function GymCoachChat({
         }
       }
 
-      if (data.openLogPrompt && (data.draftExercises?.length ?? 0) > 0) {
-        setLogSplit(normalizeSplit(data.suggestedSplit ?? "other"));
+      const coachSets = linesFromCoach(data.loggedSets ?? []);
+      const fallbackSets =
+        coachSets.length > 0 ? coachSets : looksLikeLog ? localSets : [];
+      const coachCardio =
+        data.loggedCardio && data.loggedCardio.minutes > 0
+          ? data.loggedCardio
+          : undefined;
+      let todayNote = "";
+      if (fallbackSets.length > 0 || coachCardio || cardio || namedSplit) {
+        const saved = persistWorkout({
+          lines: fallbackSets,
+          cardio: mergeCardio(cardio ?? undefined, coachCardio),
+          splitHint: data.suggestedSplit ?? namedSplit,
+          chat: next,
+        });
+        const cardioLine = saved.cardio
+          ? `\nCardio — ${formatCardio(saved.cardio)}`
+          : "";
+        todayNote = `\n\nToday so far · ${SPLIT_LABELS[resolveSplit(data.suggestedSplit ?? namedSplit, next)]}:\n${summarizeSessionExercises(saved.exercises)}${cardioLine}`;
+      }
+      setMessages([
+        ...next,
+        {
+          role: "assistant",
+          content: `${data.reply || "Okay."}${todayNote}`,
+          at: new Date().toISOString(),
+        },
+      ]);
+      if (
+        fallbackSets.length === 0 &&
+        isNameOnlyWorkoutList(trimmed) &&
+        data.openLogPrompt &&
+        (data.draftExercises?.length ?? 0) > 0
+      ) {
+        setLogSplit(resolveSplit(data.suggestedSplit, next));
         setLogDrafts(data.draftExercises ?? []);
         setLogOpen(true);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      if (localSets.length > 0 || cardio || namedSplit) {
+        confirmLocal(localSets);
+      } else {
+        setError(err instanceof Error ? err.message : "Something went wrong");
+      }
     } finally {
       setLoading(false);
     }
@@ -176,15 +418,31 @@ export function GymCoachChat({
   async function onLogConfirm(payload: {
     split: SplitTag;
     exercises: WorkoutExercise[];
-    cardio?: import("@/lib/types").CardioBlock;
+    cardio?: CardioBlock;
   }) {
     setLogOpen(false);
+    const merged = mergeSetsIntoExercises(
+      todaySession?.exercises ?? [],
+      payload.exercises.flatMap((ex) =>
+        ex.sets
+          .filter((s) => s.reps > 0)
+          .map((s, i) => ({
+            name: ex.name,
+            loadMode: ex.loadMode,
+            reps: s.reps,
+            weightKg: s.weightKg,
+            addedKg: s.addedKg,
+            assistanceKg: s.assistanceKg,
+            setIndex: i + 1,
+          })),
+      ),
+    );
     const draftSession = {
       date: today,
       split: payload.split,
       status: "completed" as const,
-      exercises: payload.exercises,
-      cardio: payload.cardio,
+      exercises: merged,
+      cardio: payload.cardio ?? todaySession?.cardio,
       source: "chat" as const,
     };
 
@@ -223,7 +481,11 @@ export function GymCoachChat({
       }
     }
 
-    add({ ...draftSession, estimatedKcal });
+    if (todaySession) {
+      update(todaySession.id, { ...draftSession, estimatedKcal });
+    } else {
+      add({ ...draftSession, estimatedKcal });
+    }
     onSessionSaved?.();
   }
 
@@ -233,7 +495,7 @@ export function GymCoachChat({
         <div>
           <h2 className="font-semibold">Coach</h2>
           <p className="text-xs text-[var(--muted)]">
-            Personalized from your workout history
+            Type how the set went — the coach reads it and logs it
           </p>
         </div>
         {messages.length > 0 && (
@@ -246,6 +508,21 @@ export function GymCoachChat({
         )}
       </div>
 
+      {todaySession &&
+        (todaySession.exercises.length > 0 || todaySession.cardio) && (
+        <div className="rounded-xl bg-[var(--surface-2)] p-3 text-xs space-y-1">
+          <div className="font-semibold text-[var(--muted)]">
+            Today · {SPLIT_LABELS[todaySession.split]}
+          </div>
+          <pre className="whitespace-pre-wrap font-sans text-[var(--foreground)]">
+            {summarizeSessionExercises(todaySession.exercises)}
+            {todaySession.cardio
+              ? `\nCardio — ${formatCardio(todaySession.cardio)}`
+              : ""}
+          </pre>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-1.5">
         {CHIPS.map((c) => (
           <button
@@ -253,10 +530,21 @@ export function GymCoachChat({
             type="button"
             className="text-[11px] px-2.5 py-1.5 rounded-full bg-[var(--surface-2)]"
             onClick={() => {
-              if (c.label === "Log finished workout") {
+              if (
+                c.label === "Log finished workout" ||
+                c.label === "Log a set" ||
+                c.label === "Log cardio"
+              ) {
                 setInput(c.text);
               } else {
-                void send(c.text, c.label === "What today?" ? "plan_today" : c.label === "Progress check" ? "insight" : "chat");
+                void send(
+                  c.text,
+                  c.label === "What today?"
+                    ? "plan_today"
+                    : c.label === "Progress check"
+                      ? "insight"
+                      : "chat",
+                );
               }
             }}
           >
@@ -268,7 +556,8 @@ export function GymCoachChat({
       <div className="max-h-72 overflow-y-auto space-y-2 rounded-xl bg-[var(--surface-2)] p-3">
         {messages.length === 0 && (
           <p className="text-xs text-[var(--muted)]">
-            Try: “Today I’m hitting push” or “Done — incline DB, pec deck, dips…”
+            Say it however you want — “leg press 140kg 8”, “2nd set same
+            weight 10”, “incline walk 12.5% 3.5km/h 30min”. The coach logs it.
           </p>
         )}
         {messages.map((m, i) => (
@@ -304,7 +593,7 @@ export function GymCoachChat({
       <div className="flex gap-2">
         <input
           className="input flex-1"
-          placeholder="Message your coach…"
+          placeholder="2nd set same weight 10 reps"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
@@ -320,7 +609,7 @@ export function GymCoachChat({
           disabled={loading || !input.trim()}
           onClick={() => void send(input)}
         >
-          Send
+          Log
         </button>
       </div>
 

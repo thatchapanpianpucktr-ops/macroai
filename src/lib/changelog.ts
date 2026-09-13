@@ -10,6 +10,35 @@ export interface ChangelogEntry {
 // Newest first. Bump `build` whenever you want the popup to show again.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    build: 17,
+    version: "1.16",
+    date: "2026-09-13",
+    title: "Type a set, it logs instantly",
+    items: [
+      "Gym chat now saves sets as you type — e.g. “deadlift 100kg 5 reps set 1”.",
+      "Sets stack on today’s workout so you can log as you go, then you’re done.",
+      "The empty fill-in sheet only opens if you list exercise names with no numbers.",
+      "Split follows what you said (leg → Legs), not the default Push day.",
+      "“set 1 / set 2” no longer becomes a new exercise name; deadlift and deadlifts merge.",
+      "Type cardio like “incline walk 12.5% 3.5km/h 30min” — kcal uses your current weight.",
+      "The coach (Gemini) reads informal logs like “2nd set same weight 10” against today’s last lift.",
+      "Logging a scan now keeps every photo you uploaded, not just the first.",
+    ],
+  },
+  {
+    build: 16,
+    version: "1.15",
+    date: "2026-09-01",
+    title: "Smarter meal logging UX",
+    items: [
+      "Today list: tap ▸ on combined meals to expand parts without opening edit.",
+      "After a scan, see when you logged a similar meal before (calories + parts).",
+      "Combined meal names auto-use your top items (e.g. chicken with rice & veg).",
+      "Edit chat sends your saved meal photo to Gemini for better calorie fixes.",
+      "Each part keeps its confidence badge and calorie range from the scan.",
+    ],
+  },
+  {
     build: 15,
     version: "1.14",
     date: "2026-09-01",

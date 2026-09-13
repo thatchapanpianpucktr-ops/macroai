@@ -14,6 +14,7 @@ import { loadDraft, clearDraft } from "@/lib/draft";
 import { currentWeight, estimateTDEE, resolveTargets } from "@/lib/tdee";
 import { addDaysYmd, todayYmd, ymdToLabel } from "@/lib/date";
 import { MEAL_ICONS, MEAL_LABELS, MEAL_ORDER } from "@/lib/meal";
+import { foodThumbs } from "@/lib/food-items";
 import type { FoodEntry } from "@/lib/types";
 
 export default function TodayPage() {
@@ -239,36 +240,78 @@ export default function TodayPage() {
 }
 
 function FoodRow({ f, onClick }: { f: FoodEntry; onClick: () => void }) {
+  const [partsOpen, setPartsOpen] = useState(false);
+  const hasParts = f.items && f.items.length > 1;
+  const photos = foodThumbs(f);
+
   return (
-    <button
-      onClick={onClick}
-      className="card p-3 flex items-center gap-3 w-full text-left active:opacity-80"
-    >
-      {f.thumb ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={f.thumb}
-          alt=""
-          className="w-12 h-12 rounded-lg object-cover shrink-0"
-        />
-      ) : (
-        <div className="w-12 h-12 rounded-lg bg-[var(--surface-2)] grid place-items-center shrink-0 text-lg">
-          🍽️
+    <div className="card overflow-hidden">
+      <div className="flex items-center gap-2 p-3">
+        <button
+          type="button"
+          onClick={onClick}
+          className="flex items-center gap-3 flex-1 min-w-0 text-left active:opacity-80"
+        >
+          {photos[0] ? (
+            <span className="relative w-12 h-12 shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={photos[0]}
+                alt=""
+                className="w-12 h-12 rounded-lg object-cover"
+              />
+              {photos.length > 1 && (
+                <span className="absolute -bottom-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-black/70 text-[9px] text-white grid place-items-center">
+                  {photos.length}
+                </span>
+              )}
+            </span>
+          ) : (
+            <div className="w-12 h-12 rounded-lg bg-[var(--surface-2)] grid place-items-center shrink-0 text-lg">
+              🍽️
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="font-medium truncate">{f.name}</div>
+            <div className="text-xs text-[var(--muted)]">
+              {hasParts ? `${f.items!.length} parts · ` : ""}
+              {f.grams ? `${f.grams} g · ` : ""}P {f.protein} · C {f.carbs} · F{" "}
+              {f.fat}
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <div className="font-semibold tabular-nums">{f.calories}</div>
+            <div className="text-[11px] text-[var(--muted)]">edit</div>
+          </div>
+        </button>
+        {hasParts && (
+          <button
+            type="button"
+            aria-label={partsOpen ? "Hide parts" : "Show parts"}
+            className="w-9 h-9 shrink-0 rounded-lg bg-[var(--surface-2)] grid place-items-center text-sm"
+            style={{ color: partsOpen ? "var(--accent)" : "var(--muted)" }}
+            onClick={() => setPartsOpen((v) => !v)}
+          >
+            {partsOpen ? "▾" : "▸"}
+          </button>
+        )}
+      </div>
+      {partsOpen && hasParts && (
+        <div className="px-3 pb-3 pt-0 space-y-1.5 border-t border-[var(--border)]">
+          {f.items!.map((it, i) => (
+            <div
+              key={i}
+              className="flex items-center justify-between gap-2 text-xs py-1.5 px-2 rounded-lg bg-[var(--surface-2)]"
+            >
+              <span className="truncate font-medium">{it.name}</span>
+              <span className="text-[var(--muted)] tabular-nums shrink-0">
+                {it.grams ? `${it.grams}g · ` : ""}
+                {it.calories} kcal
+              </span>
+            </div>
+          ))}
         </div>
       )}
-      <div className="flex-1 min-w-0">
-        <div className="font-medium truncate">{f.name}</div>
-        <div className="text-xs text-[var(--muted)]">
-          {f.items && f.items.length > 1
-            ? `${f.items.length} parts · `
-            : ""}
-          {f.grams ? `${f.grams} g · ` : ""}P {f.protein} · C {f.carbs} · F {f.fat}
-        </div>
-      </div>
-      <div className="text-right shrink-0">
-        <div className="font-semibold tabular-nums">{f.calories}</div>
-        <div className="text-[11px] text-[var(--muted)]">edit</div>
-      </div>
-    </button>
+    </div>
   );
 }

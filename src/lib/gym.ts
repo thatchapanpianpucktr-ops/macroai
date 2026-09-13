@@ -100,6 +100,8 @@ export function compactWorkoutHistory(
           type: s.cardio.type,
           minutes: s.cardio.minutes,
           intensity: s.cardio.intensity,
+          inclinePct: s.cardio.inclinePct,
+          speedKmh: s.cardio.speedKmh,
         }
       : undefined,
     exercises:
@@ -143,18 +145,29 @@ export function estimateWorkoutKcalLocal(
   return Math.max(0, kcal);
 }
 
+/** ACSM walking/running MET from speed + grade, else intensity band. */
 export function estimateCardioKcalLocal(
   cardio: CardioBlock,
   bodyweightKg = 75,
 ): number {
   const minutes = Math.max(0, cardio.minutes || 0);
   if (!minutes) return 0;
-  const intensity = cardio.intensity ?? "moderate";
-  // MET-ish multipliers relative to bodyweight
-  const met =
-    intensity === "easy" ? 4 : intensity === "hard" ? 9 : 6.5;
-  // kcal ≈ MET * kg * hours
-  return Math.round(met * bodyweightKg * (minutes / 60));
+  const kg = Math.max(30, bodyweightKg);
+  let met: number;
+  if (cardio.speedKmh && cardio.speedKmh > 0) {
+    const mPerMin = (cardio.speedKmh * 1000) / 60;
+    const grade = Math.max(0, (cardio.inclinePct ?? 0) / 100);
+    const vo2 =
+      cardio.speedKmh >= 8
+        ? 3.5 + 0.2 * mPerMin + 0.9 * mPerMin * grade
+        : 3.5 + 0.1 * mPerMin + 1.8 * mPerMin * grade;
+    met = vo2 / 3.5;
+  } else {
+    const intensity = cardio.intensity ?? "moderate";
+    met = intensity === "easy" ? 4 : intensity === "hard" ? 9 : 6.5;
+    if ((cardio.inclinePct ?? 0) >= 8) met += 1.5;
+  }
+  return Math.round(met * kg * (minutes / 60));
 }
 
 export function estimateStepsKcal(steps: number, bodyweightKg = 75): number {
@@ -163,7 +176,56 @@ export function estimateStepsKcal(steps: number, bodyweightKg = 75): number {
   return Math.round(steps * 0.04 * (bodyweightKg / 70));
 }
 
+function tagFromSplitWord(word: string): SplitTag | null {
+  const w = word.toLowerCase().replace(/\s+/g, " ").trim();
+  if (w === "leg" || w === "legs") return "legs";
+  if (w.startsWith("full")) return "full";
+  if (
+    w === "push" ||
+    w === "pull" ||
+    w === "upper" ||
+    w === "lower" ||
+    w === "cardio"
+  ) {
+    return w;
+  }
+  return null;
+}
+
+/** Read the split the user named (e.g. "today's workout is leg"), not "leg press". */
+export function extractSplit(text: string): SplitTag | null {
+  const s = text.toLowerCase();
+  const explicit = s.match(
+    /\btoday(?:'s)?(?:\s+workout|\s+session)?\s+is\s+(?:a\s+|an\s+)?(legs?|push|pull|upper|lower|full(?:\s*body)?|cardio)\b/,
+  ) ||
+    s.match(
+      /(?:workout|session|training)(?:\s+is|\s+will be)\s+(?:a\s+|an\s+)?(legs?|push|pull|upper|lower|full(?:\s*body)?|cardio)\b/,
+    ) ||
+    s.match(
+      /\b(?:doing|hitting|training|planning)\s+(?:a\s+|an\s+)?(legs?|push|pull|upper|lower|full(?:\s*body)?|cardio)\b/,
+    ) ||
+    s.match(/\b(legs?|push|pull|upper|lower|full|cardio)\s+(?:day|variation)\b/);
+  if (explicit) return tagFromSplitWord(explicit[1]);
+
+  const exact = tagFromSplitWord(s.trim());
+  if (exact) return exact;
+
+  if (/\bleg day\b|\blower body\b|\bquads?\b|\bhamstrings?\b/.test(s)) {
+    return "legs";
+  }
+  if (/\blegs\b/.test(s)) return "legs";
+  if (/\bfull\s*body\b/.test(s)) return "full";
+  if (/\bpush\b/.test(s) && !/\bpush-?ups?\b/.test(s)) return "push";
+  if (/\bpull\b/.test(s) && !/\bpull-?ups?\b/.test(s)) return "pull";
+  if (/\bupper\b/.test(s)) return "upper";
+  if (/\blower\b/.test(s) && !/\blower body\b/.test(s)) return "lower";
+  if (/\bcardio\s*(only|day)\b/.test(s)) return "cardio";
+  return null;
+}
+
 export function normalizeSplit(raw: unknown): SplitTag {
+  const fromText = extractSplit(String(raw ?? ""));
+  if (fromText) return fromText;
   const s = String(raw ?? "")
     .toLowerCase()
     .trim();

@@ -71,7 +71,7 @@ export default function GymPage() {
       <header>
         <h1 className="text-xl font-bold">Gym</h1>
         <p className="text-sm text-[var(--muted)]">
-          Chat with your coach, log structured sessions, track burn.
+          Type each set as you finish it. The coach still plans and reviews.
         </p>
       </header>
 
@@ -227,8 +227,7 @@ export default function GymPage() {
           if (id) {
             const estimatedKcal =
               data.status === "completed"
-                ? data.estimatedKcal ??
-                  estimateWorkoutKcalLocal(data, bodyweightKg)
+                ? estimateWorkoutKcalLocal(data, bodyweightKg)
                 : 0;
             update(id, { ...data, estimatedKcal });
           }

@@ -1,18 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { NumberInput } from "@/components/NumberInput";
 import { MEAL_LABELS, MEAL_ORDER } from "@/lib/meal";
 import { downscale } from "@/lib/image";
 import { useApiKey, useSettings } from "@/lib/store";
 import { openApiKeyPrompt } from "@/lib/apikey-prompt";
+import { ConfidenceBadge } from "@/components/ConfidenceBadge";
 import { ChatPanel, type ChatItem } from "@/components/ChatPanel";
 import {
   chatItemsToSubItems,
   entryToSubItems,
   scaleFoodItems,
   subItemsToChatItems,
+  foodThumbs,
   sumFoodItems,
+  thumbToInlineImage,
 } from "@/lib/food-items";
 import type { ChatMessage, FoodEntry, FoodSubItem, Meal } from "@/lib/types";
 
@@ -112,6 +115,13 @@ export function FoodEditSheet({
       setSubItems([]);
     }
   }, [entry]);
+
+  const photos = entry ? foodThumbs(entry) : [];
+  const editImages = useMemo(() => {
+    return photos
+      .map((t) => thumbToInlineImage(t))
+      .filter((img): img is { base64: string; mimeType: string } => Boolean(img));
+  }, [entry?.thumb, entry?.thumbs]);
 
   if (!entry || !draft || !base) return null;
 
@@ -236,7 +246,7 @@ export function FoodEditSheet({
   function applyChatItems(next: ChatItem[]) {
     if (next.length === 0) return;
     if (hasBreakdown || next.length > 1) {
-      applyTotalsFromSubItems(chatItemsToSubItems(next));
+      applyTotalsFromSubItems(chatItemsToSubItems(next, subItems));
       setShowBreakdown(true);
       return;
     }
@@ -313,13 +323,25 @@ export function FoodEditSheet({
           </button>
         </div>
 
-        {entry.thumb ? (
+        {photos.length === 1 ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={entry.thumb}
+            src={photos[0]}
             alt=""
             className="w-full max-h-64 object-cover rounded-xl mb-4"
           />
+        ) : photos.length > 1 ? (
+          <div className="flex gap-2 overflow-x-auto no-scrollbar mb-4 -mx-1 px-1">
+            {photos.map((src, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={`${i}-${src.slice(0, 24)}`}
+                src={src}
+                alt={`Meal photo ${i + 1}`}
+                className="h-40 w-40 object-cover rounded-xl shrink-0"
+              />
+            ))}
+          </div>
         ) : null}
 
         <label className="block mb-3">
@@ -415,6 +437,11 @@ export function FoodEditSheet({
                       onChange={(e) =>
                         updateSubItem(i, { name: e.target.value })
                       }
+                    />
+                    <ConfidenceBadge
+                      confidence={it.confidence}
+                      calorieMin={it.calorieMin}
+                      calorieMax={it.calorieMax}
                     />
                     <div className="grid grid-cols-5 gap-1 text-center">
                       <label className="block">
@@ -576,10 +603,11 @@ export function FoodEditSheet({
       <ChatPanel
         open={chatOpen}
         onClose={() => setChatOpen(false)}
-        title={hasBreakdown ? `Discuss: ${draft.name}` : `Discuss: ${draft.name}`}
+        title={`Discuss: ${draft.name}`}
         kind={chatKind}
         allowPhoto
         items={subItemsToChatItems(subItems)}
+        images={editImages}
         messages={chatMessages}
         onMessagesChange={setChatMessages}
         onApplyItems={applyChatItems}

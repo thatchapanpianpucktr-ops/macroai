@@ -12,6 +12,7 @@ import {
   type WorkoutSession,
 } from "./types";
 import { defaultMeal } from "./meal";
+import { entryHasPhoto, foodThumbs, stripEntryPhotos } from "./food-items";
 
 const KEYS = {
   settings: "macroai.settings.v1",
@@ -78,11 +79,11 @@ function stripOldestThumbs(foods: FoodEntry[], count: number): FoodEntry[] {
   if (count <= 0) return foods;
   const indices: number[] = [];
   for (let i = foods.length - 1; i >= 0; i--) {
-    if (foods[i]?.thumb) indices.push(i);
+    if (foods[i] && entryHasPhoto(foods[i])) indices.push(i);
   }
   const drop = new Set(indices.slice(0, count));
   if (drop.size === 0) return foods;
-  return foods.map((f, i) => (drop.has(i) ? { ...f, thumb: undefined } : f));
+  return foods.map((f, i) => (drop.has(i) ? stripEntryPhotos(f) : f));
 }
 
 function trySetItem(key: string, raw: string): boolean {
@@ -98,7 +99,7 @@ function trySetItem(key: string, raw: string): boolean {
 /** Free space by dropping oldest food photos. Returns how many were removed. */
 function freeSpaceByStrippingThumbs(): number {
   const list = read<FoodEntry[]>("foods", []);
-  const withThumbs = list.filter((f) => f.thumb).length;
+  const withThumbs = list.filter((f) => entryHasPhoto(f)).length;
   if (withThumbs === 0) return 0;
 
   const batch = Math.max(3, Math.ceil(withThumbs * 0.1));
@@ -108,7 +109,7 @@ function freeSpaceByStrippingThumbs(): number {
   if (trySetItem(KEYS.foods, raw)) return removed;
 
   // Still over quota — strip everything photo-related.
-  foods = foods.map((f) => (f.thumb ? { ...f, thumb: undefined } : f));
+  foods = foods.map((f) => (entryHasPhoto(f) ? stripEntryPhotos(f) : f));
   trySetItem(KEYS.foods, JSON.stringify(foods));
   return withThumbs;
 }
@@ -141,10 +142,10 @@ function write<T>(key: Key, value: T) {
     let foods = value as FoodEntry[];
     const batch = Math.max(
       3,
-      Math.ceil(foods.filter((f) => f.thumb).length * 0.1) || 3,
+      Math.ceil(foods.filter((f) => entryHasPhoto(f)).length * 0.1) || 3,
     );
     for (let attempt = 0; attempt < 50; attempt++) {
-      const before = foods.filter((f) => f.thumb).length;
+      const before = foods.filter((f) => entryHasPhoto(f)).length;
       if (before === 0) break;
       foods = stripOldestThumbs(foods, batch);
       payload = foods;
@@ -154,7 +155,7 @@ function write<T>(key: Key, value: T) {
         return;
       }
     }
-    foods = foods.map((f) => (f.thumb ? { ...f, thumb: undefined } : f));
+    foods = foods.map((f) => (entryHasPhoto(f) ? stripEntryPhotos(f) : f));
     raw = JSON.stringify(foods);
     if (trySetItem(storageKey, raw)) {
       emit();
@@ -191,13 +192,13 @@ export function clearFoodThumbs(olderThanDays?: number): number {
       : null;
   let removed = 0;
   const next = list.map((f) => {
-    if (!f.thumb) return f;
+    if (!entryHasPhoto(f)) return f;
     if (cutoff != null) {
       const t = Date.parse(f.createdAt || f.date);
       if (!Number.isFinite(t) || t >= cutoff) return f;
     }
-    removed += 1;
-    return { ...f, thumb: undefined };
+    removed += foodThumbs(f).length;
+    return stripEntryPhotos(f);
   });
   if (removed > 0) write("foods", next);
   return removed;

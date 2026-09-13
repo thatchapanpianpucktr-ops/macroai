@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
-import { BottomNav } from "@/components/BottomNav";
+import { AppShell } from "@/components/AppShell";
 import { ServiceWorker } from "@/components/ServiceWorker";
 import { WhatsNew } from "@/components/WhatsNew";
 import { ApiKeyPrompt } from "@/components/ApiKeyPrompt";
@@ -45,10 +45,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geistSans.variable} h-full antialiased`}>
       <body className="min-h-full">
-        <main className="mx-auto max-w-md px-4 pb-28 pt-[calc(env(safe-area-inset-top)+1rem)]">
-          {children}
-        </main>
-        <BottomNav />
+        <AppShell>{children}</AppShell>
         <ServiceWorker />
         <WhatsNew />
         <ApiKeyPrompt />

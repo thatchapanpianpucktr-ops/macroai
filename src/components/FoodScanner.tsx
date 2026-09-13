@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { downscale } from "@/lib/image";
 import { useApiKey, useFoods, useSettings } from "@/lib/store";
 import { openApiKeyPrompt } from "@/lib/apikey-prompt";
 import { saveDraft, clearDraft, loadDraft } from "@/lib/draft";
 import { NumberInput } from "@/components/NumberInput";
 import { ChatPanel, type ChatItem } from "@/components/ChatPanel";
+import { deriveMealName, findSimilarMeal, mealHistoryLine } from "@/lib/food-history";
+import { CONF_BG, CONF_FG } from "@/lib/confidence";
 import type { AnalyzedItem, AnalyzeResponse, ChatMessage, FoodSubItem } from "@/lib/types";
 
 function toSubItem(it: DraftItem): FoodSubItem {
@@ -17,19 +19,11 @@ function toSubItem(it: DraftItem): FoodSubItem {
     protein: it.protein,
     carbs: it.carbs,
     fat: it.fat,
+    confidence: it.confidence,
+    calorieMin: it.calorieMin,
+    calorieMax: it.calorieMax,
   };
 }
-
-const CONF_BG: Record<string, string> = {
-  high: "rgba(52,211,153,0.18)",
-  medium: "rgba(251,191,36,0.18)",
-  low: "rgba(248,113,113,0.18)",
-};
-const CONF_FG: Record<string, string> = {
-  high: "var(--accent)",
-  medium: "var(--warn)",
-  low: "var(--danger)",
-};
 
 interface DraftItem extends AnalyzedItem {
   /** original grams from the model, used to scale when the user edits grams */
@@ -51,7 +45,7 @@ export function FoodScanner({
   /** Called once the draft has been loaded so the caller can hide the banner. */
   onDraftConsumed?: () => void;
 }) {
-  const { add } = useFoods();
+  const { add, foods } = useFoods();
   const [apiKey] = useApiKey();
   const [settings] = useSettings();
   const [open, setOpen] = useState(false);
@@ -75,6 +69,11 @@ export function FoodScanner({
   const [mealName, setMealName] = useState("");
 
   const cover = pending[0]?.thumb ?? null;
+  const keptPhotos = pending.map((p) => p.thumb).filter(Boolean);
+  const photoFields = {
+    thumb: keptPhotos[0],
+    thumbs: keptPhotos.length > 0 ? keptPhotos : undefined,
+  };
 
   // Restore a saved draft and open the scanner when requested from outside.
   useEffect(() => {
@@ -98,16 +97,19 @@ export function FoodScanner({
   }, [pending, hint, analyzed]);
 
   /** Best-effort name for a combined entry when the model didn't give one. */
-  function deriveMealName(list: { name: string; calories: number }[]) {
-    const names = [...list]
-      .sort((a, b) => b.calories - a.calories)
-      .map((it) => it.name.trim())
-      .filter(Boolean);
-    if (names.length === 0) return "Meal";
-    if (names.length === 1) return names[0];
-    if (names.length === 2) return `${names[0]} & ${names[1]}`;
-    return `${names[0]}, ${names[1]} & more`;
-  }
+  // deriveMealName lives in @/lib/food-history
+
+  const similarPast = useMemo(() => {
+    if (items.length === 0 || loading) return null;
+    const included = items.filter((it) => it.include);
+    if (included.length === 0) return null;
+    return findSimilarMeal(
+      foods,
+      included.map((it) => it.name),
+      mealName || deriveMealName(included),
+      date,
+    );
+  }, [foods, items, mealName, date, loading]);
 
   function reset() {
     setItems([]);
@@ -386,7 +388,7 @@ export function FoodScanner({
         fat: Math.round(sum.f * 10) / 10,
         grams: sum.g ? Math.round(sum.g) : undefined,
         source: "ai",
-        thumb: cover ?? undefined,
+        ...photoFields,
         chat: chatMessages.length ? chatMessages : undefined,
         items: included.map(toSubItem),
       });
@@ -412,7 +414,7 @@ export function FoodScanner({
           fat: it.fat,
           grams: it.grams,
           source: "ai",
-          thumb: cover ?? undefined,
+          ...photoFields,
           chat: chatMessages.length ? chatMessages : undefined,
         });
       }
@@ -438,7 +440,7 @@ export function FoodScanner({
         fat: Math.round(sum.f * 10) / 10,
         grams: sum.g ? Math.round(sum.g) : undefined,
         source: "ai",
-        thumb: cover ?? undefined,
+        ...photoFields,
         chat: chatMessages.length ? chatMessages : undefined,
         items: list.map(toSubItem),
       });
@@ -675,6 +677,18 @@ export function FoodScanner({
 
             {note && !loading && (
               <div className="text-xs text-[var(--muted)] mb-2">{note}</div>
+            )}
+
+            {similarPast && !loading && items.length > 0 && (
+              <div
+                className="text-xs rounded-xl p-3 mb-3"
+                style={{
+                  background: "rgba(56,189,248,0.1)",
+                  color: "var(--accent-2)",
+                }}
+              >
+                {mealHistoryLine(similarPast)}
+              </div>
             )}
 
             {!loading && items.length > 0 && (

@@ -285,27 +285,95 @@ export function GymSessionSheet({
             </label>
             {draft.cardioOn && (
               <div className="grid grid-cols-2 gap-2">
-                <input
-                  className="input col-span-2 py-1.5 text-sm"
-                  value={draft.cardio.type}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      cardio: { ...draft.cardio, type: e.target.value },
-                    })
-                  }
-                  placeholder="Cardio type"
-                />
-                <NumberInput
-                  className="input py-1.5 text-sm"
-                  value={draft.cardio.minutes}
-                  onChange={(v) =>
-                    setDraft({
-                      ...draft,
-                      cardio: { ...draft.cardio, minutes: v },
-                    })
-                  }
-                />
+                <label className="block col-span-2">
+                  <span className="text-[10px] text-[var(--muted)]">Type</span>
+                  <input
+                    className="input py-1.5 text-sm"
+                    value={draft.cardio.type}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        cardio: { ...draft.cardio, type: e.target.value },
+                      })
+                    }
+                    placeholder="incline walk"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[10px] text-[var(--muted)]">
+                    minutes
+                  </span>
+                  <NumberInput
+                    className="input py-1.5 text-sm"
+                    value={draft.cardio.minutes}
+                    onChange={(v) =>
+                      setDraft({
+                        ...draft,
+                        cardio: { ...draft.cardio, minutes: v },
+                      })
+                    }
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[10px] text-[var(--muted)]">
+                    intensity
+                  </span>
+                  <select
+                    className="input py-1.5 text-sm"
+                    value={draft.cardio.intensity ?? "moderate"}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        cardio: {
+                          ...draft.cardio,
+                          intensity: e.target.value as CardioBlock["intensity"],
+                        },
+                      })
+                    }
+                  >
+                    <option value="easy">Easy</option>
+                    <option value="moderate">Moderate</option>
+                    <option value="hard">Hard</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-[10px] text-[var(--muted)]">
+                    incline %
+                  </span>
+                  <NumberInput
+                    className="input py-1.5 text-sm"
+                    step={0.1}
+                    value={draft.cardio.inclinePct ?? 0}
+                    onChange={(v) =>
+                      setDraft({
+                        ...draft,
+                        cardio: {
+                          ...draft.cardio,
+                          inclinePct: v || undefined,
+                        },
+                      })
+                    }
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[10px] text-[var(--muted)]">
+                    km/h
+                  </span>
+                  <NumberInput
+                    className="input py-1.5 text-sm"
+                    step={0.1}
+                    value={draft.cardio.speedKmh ?? 0}
+                    onChange={(v) =>
+                      setDraft({
+                        ...draft,
+                        cardio: {
+                          ...draft.cardio,
+                          speedKmh: v || undefined,
+                        },
+                      })
+                    }
+                  />
+                </label>
               </div>
             )}
           </>
@@ -417,9 +485,10 @@ export function ManualLogButton({
             {cardioOn && (
               <div className="grid grid-cols-2 gap-2">
                 <input
-                  className="input"
+                  className="input col-span-2"
                   value={cardioType}
                   onChange={(e) => setCardioType(e.target.value)}
+                  placeholder="incline walk"
                 />
                 <NumberInput
                   className="input"

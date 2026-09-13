@@ -296,6 +296,36 @@ export function GymLogPromptSheet({
                   <option value="hard">Hard</option>
                 </select>
               </label>
+              <label className="block">
+                <span className="text-[10px] text-[var(--muted)]">
+                  incline %
+                </span>
+                <NumberInput
+                  className="input py-1.5 text-sm"
+                  step={0.1}
+                  value={cardio.inclinePct ?? 0}
+                  onChange={(v) =>
+                    setCardio((c) => ({
+                      ...c,
+                      inclinePct: v || undefined,
+                    }))
+                  }
+                />
+              </label>
+              <label className="block">
+                <span className="text-[10px] text-[var(--muted)]">km/h</span>
+                <NumberInput
+                  className="input py-1.5 text-sm"
+                  step={0.1}
+                  value={cardio.speedKmh ?? 0}
+                  onChange={(v) =>
+                    setCardio((c) => ({
+                      ...c,
+                      speedKmh: v || undefined,
+                    }))
+                  }
+                />
+              </label>
             </div>
           )}
         </div>

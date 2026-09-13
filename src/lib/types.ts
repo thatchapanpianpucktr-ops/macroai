@@ -64,8 +64,10 @@ export interface FoodEntry {
   grams?: number;
   meal?: Meal;
   source: "ai" | "manual" | "db" | "barcode";
-  /** kept meal photo (JPEG data URL, ~800px); dropped from oldest entries when storage fills */
+  /** first kept meal photo (JPEG data URL, ~800px); dropped when storage fills */
   thumb?: string;
+  /** all kept meal photos from the scan; `thumb` stays the first for older builds */
+  thumbs?: string[];
   /** saved AI discussion about this item, if any */
   chat?: ChatMessage[];
   /** per-item breakdown when logged as one combined entry */
@@ -80,6 +82,9 @@ export interface FoodSubItem {
   protein: number;
   carbs: number;
   fat: number;
+  confidence?: Confidence;
+  calorieMin?: number;
+  calorieMax?: number;
 }
 
 export interface MacroTargets {
@@ -178,6 +183,10 @@ export interface CardioBlock {
   minutes: number;
   distanceKm?: number;
   intensity?: "easy" | "moderate" | "hard";
+  /** treadmill grade, e.g. 12.5 */
+  inclinePct?: number;
+  /** walking/running speed */
+  speedKmh?: number;
   estimatedKcal?: number;
 }
 
